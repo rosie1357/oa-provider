@@ -455,29 +455,6 @@ hive_sample(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
 
 # COMMAND ----------
 
-# look at % null for joined on cols
-"""
-COLS = ['defhc_id', 'net_defhc_id', 'payer_id', 'payer_name']
-
-for col in COLS:
-    
-    df_mxclaims_master = add_null_indicator(df_mxclaims_master, col)
-    
-    sdf_frequency(df_mxclaims_master, [f"{col}_null"], with_pct=True)
-"""
-
-# COMMAND ----------
-
-# crosstabs of network by network flag, pos_cat by pos
-
-#sdf_frequency(df_mxclaims_master, ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', with_pct=True, maxobs=100)
-
-# COMMAND ----------
-
-#sdf_frequency(df_mxclaims_master, ['pos_cat', 'PlaceOfServiceCd'], order='cols', with_pct=True, maxobs=100)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC 
 # MAGIC #### 3B. PCP referrals claims table
@@ -561,12 +538,6 @@ hive_sample(f"{TMP_DATABASE}.{PCP_REFS_TBL}")
 
 # COMMAND ----------
 
-# crosstab of network by network flag
-
-#sdf_frequency(df_referrals, ['rend_network_id', 'network_flag'], with_pct=True, maxobs=100)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC 
 # MAGIC #### 3C. Affiliated provider claims
@@ -622,9 +593,31 @@ hive_sample(f"{TMP_DATABASE}.{AFF_CLMS_TBL}")
 
 # COMMAND ----------
 
-# look at crosstabs for creation of flags
+# ALL freqs to check column creation for initial testing
 
-#sdf_frequency(aff_claims, ['pcp_flag', 'PrimarySpecialty'], order='cols', with_pct='True', maxobs=100)
+# CLAIMS: look at % null for joined on cols
+
+COLS = ['defhc_id', 'net_defhc_id', 'payer_id', 'payer_name']
+
+for col in COLS:
+    
+    df_mxclaims_master = add_null_indicator(df_mxclaims_master, col)
+    
+    sdf_frequency(df_mxclaims_master, [f"{col}_null"], with_pct=True)
+
+# CLAIMS: crosstabs of network by network flag, pos_cat by pos
+
+sdf_frequency(df_mxclaims_master, ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', with_pct=True, maxobs=100)
+
+sdf_frequency(df_mxclaims_master, ['pos_cat', 'PlaceOfServiceCd'], order='cols', with_pct=True, maxobs=100)
+
+# REFERRALS: crosstab of network by network flag
+
+sdf_frequency(df_referrals, ['rend_network_id', 'network_flag'], with_pct=True, maxobs=100)
+
+# AFFILIATIONS: look at crosstabs for creation of flags
+
+sdf_frequency(aff_claims, ['pcp_flag', 'PrimarySpecialty'], order='cols', with_pct='True', maxobs=100)
 
 # COMMAND ----------
 
