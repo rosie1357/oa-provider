@@ -41,10 +41,6 @@
 
 # COMMAND ----------
 
-import pandas as pd
-
-# COMMAND ----------
-
 # MAGIC %run ./_funcs_include/all_provider_funcs
 
 # COMMAND ----------
@@ -77,7 +73,13 @@ SPECIALIST_LIST = list_lookup(intable = f"{DATABASE}.pcp_spec_assign",
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ### 1. Get input organization info
+# MAGIC ### 1. Org Info and Affiliations View
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 1A. Get input org info
 
 # COMMAND ----------
 
@@ -120,6 +122,36 @@ if INPUT_NETWORK is None:
     exit_notebook(f"Input Definitive ID {DEFHC_ID} is missing parent network")
     
 print(f"Input network: {INPUT_NETWORK}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 1B. Create temp view of primary affiliations
+
+# COMMAND ----------
+
+# create temp view with top hospital affiliation for every provider
+# will use for nearby HCPs and affiliated providers 
+
+prim_aff = spark.sql(f"""
+    select physician_npi
+           ,defhc_id as hospital_id_primary
+           ,hospital_name as hospital_name_primary
+           ,firm_type
+           ,score
+           ,score_bucket
+           ,row_number() over (partition by physician_npi 
+                               order by score_bucket desc, score desc)
+                         as rn
+
+            from   hcp_affiliations.physician_org_affiliations
+            where  include_flag = 1 and
+                   current_flag = 1 and 
+                   firm_type='Hospital'
+       """)
+
+prim_aff.filter(F.col('rn')==1).createOrReplaceTempView('prim_aff_vw')
 
 # COMMAND ----------
 
@@ -294,11 +326,14 @@ sdf_frequency(df_nearby_hcos, ['FirmTypeName'])
 
 # COMMAND ----------
 
-# join nearby_hcps_vw to d_provider to get primary specialty and role, and create pcp vs specialist flag
+# join nearby_hcps_vw to d_provider to get provider info, and primary affiliations to get primary hospital affiliation
+# create pcp vs specialist flag
 
 df_nearby_hcps_spec = spark.sql(f"""
     select np.*
-        ,  RoleDesc
+        ,  ProviderName
+        ,  hospital_id_primary
+        ,  hospital_name_primary
         ,  PrimarySpecialty
         
         ,  case when PrimarySpecialty in ({PCP_LIST}) then 1
@@ -310,6 +345,9 @@ df_nearby_hcps_spec = spark.sql(f"""
 
     left join   martdim.d_provider pv 
     on          np.NPI = pv.NPI
+    
+    left join   prim_aff_vw pa
+    on          np.NPI = pa.physician_npi
 """)
 
 pyspark_to_hive(df_nearby_hcps_spec,
@@ -516,8 +554,8 @@ df_referrals = spark.sql(f"""
         ,  b.PrimarySpecialty
     from   referrals_vw a
 
-           inner join {TMP_DATABASE}.nearby_hcps b
-           on a.ref_npi = b.npi
+     inner join {TMP_DATABASE}.nearby_hcps b
+     on a.ref_npi = b.npi
            
     where  b.PrimarySpecialty in ({PCP_LIST})     
 
@@ -566,7 +604,7 @@ aff_claims = spark.sql(f"""
         
     from   {TMP_DATABASE}.{MX_CLMS_TBL} a 
     
-    inner join  affiliations_vw b 
+    inner join  (select * from prim_aff_vw where hospital_id_primary = {DEFHC_ID}) b 
     on          a.RenderingProviderNPI = b.physician_npi 
     
     left join  MartDim.D_Provider c
@@ -582,8 +620,7 @@ aff_claims = spark.sql(f"""
 # save to temp database
 
 pyspark_to_hive(aff_claims,
-               f"{TMP_DATABASE}.{AFF_CLMS_TBL}",
-               overwrite_schema='true')
+               f"{TMP_DATABASE}.{AFF_CLMS_TBL}")
 
 # COMMAND ----------
 
