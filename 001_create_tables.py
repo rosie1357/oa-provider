@@ -41,10 +41,6 @@
 
 # COMMAND ----------
 
-import pandas as pd
-
-# COMMAND ----------
-
 # MAGIC %run ./_funcs_include/all_provider_funcs
 
 # COMMAND ----------
@@ -53,7 +49,7 @@ import pandas as pd
 
 RUN_VALUES = get_widgets()
 
-DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE'])
+DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC'])
 
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
@@ -77,7 +73,13 @@ SPECIALIST_LIST = list_lookup(intable = f"{DATABASE}.pcp_spec_assign",
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ### 1. Get input organization info
+# MAGIC ### 1. Org Info and Affiliations View
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 1A. Get input org info
 
 # COMMAND ----------
 
@@ -105,21 +107,56 @@ hive_sample(f"{TMP_DATABASE}.input_org_info")
 
 # COMMAND ----------
 
-# create variable with input network:
+# MAGIC %md
+# MAGIC 
+# MAGIC ##### 1Ai. Initial checks for compliance
+
+# COMMAND ----------
+
+# create variables with input network and firm type:
 #   if no record found at all, exit with error no matching defhc_id
 #   if no network found, exit with error no parent network
 
 try:
-    INPUT_NETWORK = input_org_info.select('input_network').collect()[0][0]
+    INPUT_NETWORK, FIRM_TYPE = sdf_return_row_values(input_org_info, ['input_network', 'firm_type'])
     
 except IndexError:
     exit_notebook(f"Input Definitive ID {DEFHC_ID} not found in database")
 
 if INPUT_NETWORK is None:
-
     exit_notebook(f"Input Definitive ID {DEFHC_ID} is missing parent network")
     
 print(f"Input network: {INPUT_NETWORK}")
+print(f"Input firm type: {FIRM_TYPE}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 1B. Create temp view of primary affiliations
+
+# COMMAND ----------
+
+# create temp view with top given firm type affiliation for every provider
+# will use for nearby HCPs and affiliated providers 
+
+prim_aff = spark.sql(f"""
+    select physician_npi
+           ,defhc_id as defhc_id_primary
+           ,hospital_name as defhc_name_primary
+           ,score
+           ,score_bucket
+           ,row_number() over (partition by physician_npi 
+                               order by score_bucket desc, score desc)
+                         as rn
+
+            from   hcp_affiliations.physician_org_affiliations
+            where  include_flag = 1 and
+                   current_flag = 1 and 
+                   firm_type='{FIRM_TYPE}'
+       """)
+
+prim_aff.filter(F.col('rn')==1).createOrReplaceTempView('prim_aff_vw')
 
 # COMMAND ----------
 
@@ -223,7 +260,7 @@ gdf_hco_npi_coords = get_coordinates(df_hco_npi_coords)
 
 gdf_input_coord['geometry'] = gdf_input_coord['geometry'].buffer(1609.34*RADIUS) # miles to meters
 
-df_nearby_hcos = get_intersection(base_gdf = gdf_input_coord,
+df_nearby_hcos_id = get_intersection(base_gdf = gdf_input_coord,
                                  match_gdf = gdf_hco_coords,
                                  id_col = 'defhc_id')
 
@@ -231,7 +268,7 @@ df_nearby_hcps = get_intersection(base_gdf = gdf_input_coord,
                                  match_gdf = gdf_hcp_coords,
                                  id_col = 'NPI')
 
-df_nearby_hco_npis = get_intersection(base_gdf = gdf_input_coord,
+df_nearby_hcos_npi = get_intersection(base_gdf = gdf_input_coord,
                                       match_gdf = gdf_hco_npi_coords,
                                       id_col = 'NPI')
 
@@ -245,46 +282,42 @@ df_nearby_hco_npis = get_intersection(base_gdf = gdf_input_coord,
 
 # create temp views for hcos and hcps to join to external tables before saving
 
-df_nearby_hcos.createOrReplaceTempView('nearby_hcos_vw')
+df_nearby_hcos_id.createOrReplaceTempView('df_nearby_hcos_id_vw')
 
 df_nearby_hcps.createOrReplaceTempView('nearby_hcps_vw')
+
+df_nearby_hcos_npi.createOrReplaceTempView('df_nearby_hcos_npi_vw')
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ##### 2Ci. Nearby HCOs
+# MAGIC ##### 2Ci. Nearby HCOs (IDs)
 
 # COMMAND ----------
 
 # join nearby_hcos to d_profile to get firm and facility type, and save to temp directory
 
-df_nearby_hcos = spark.sql(f"""
+df_nearby_hcos_id = spark.sql(f"""
     select no.*
         ,  pf.FirmTypeName
         ,  pf.FacilityTypeName
         
-    from   nearby_hcos_vw no
+    from  df_nearby_hcos_id_vw no
     
     left join   martdim.d_profile pf 
     on          no.defhc_id = pf.DefinitiveId
 
 """)
 
-pyspark_to_hive(df_nearby_hcos,
-               f"{TMP_DATABASE}.nearby_hcos")
+pyspark_to_hive(df_nearby_hcos_id,
+               f"{TMP_DATABASE}.nearby_hcos_id")
 
 # COMMAND ----------
 
 # print sample of records
 
-hive_sample(f"{TMP_DATABASE}.nearby_hcos")
-
-# COMMAND ----------
-
-# freq of firm type
-
-sdf_frequency(df_nearby_hcos, ['FirmTypeName'])
+hive_sample(f"{TMP_DATABASE}.nearby_hcos_id")
 
 # COMMAND ----------
 
@@ -294,11 +327,17 @@ sdf_frequency(df_nearby_hcos, ['FirmTypeName'])
 
 # COMMAND ----------
 
-# join nearby_hcps_vw to d_provider to get primary specialty and role, and create pcp vs specialist flag
+# join nearby_hcps_vw to d_provider to get provider info, and primary affiliations to get primary hospital affiliation
+# create pcp vs specialist flag
+# create affiliated flag based on primary id flag
 
 df_nearby_hcps_spec = spark.sql(f"""
     select np.*
-        ,  RoleDesc
+        ,  ProviderName
+        ,  defhc_id_primary
+        ,  defhc_name_primary
+        , {affiliated_flag('defhc_id_primary', DEFHC_ID)}
+        
         ,  PrimarySpecialty
         
         ,  case when PrimarySpecialty in ({PCP_LIST}) then 1
@@ -306,10 +345,13 @@ df_nearby_hcps_spec = spark.sql(f"""
                 else null
                 end as pcp_flag
         
-    from   nearby_hcps_vw np
+    from  nearby_hcps_vw np
 
-    left join   martdim.d_provider pv 
+    left join martdim.d_provider pv 
     on          np.NPI = pv.NPI
+    
+    left join   prim_aff_vw pa
+    on          np.NPI = pa.physician_npi
 """)
 
 pyspark_to_hive(df_nearby_hcps_spec,
@@ -331,20 +373,45 @@ sdf_frequency(df_nearby_hcps_spec, ['pcp_flag', 'PrimarySpecialty'], order='cols
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ##### 2Ciii. Nearby NPIs
+# MAGIC ##### 2Ciii. Nearby HCOs (NPIs)
 
 # COMMAND ----------
 
-# save stacked HCP and HCO_NPI to temp database
+# join nearby hcos by NPI to the following:
+#    D_Organization to get defhc_id
+#    D_Profile to get network IDs
 
-pyspark_to_hive(df_nearby_hcps.union(df_nearby_hco_npis),
-               f"{TMP_DATABASE}.nearby_npis")
+df_nearby_hcos_npi = spark.sql(f"""
+    select hn.*
+            ,  p.DefinitiveId as defhc_id 
+            ,  p.NetworkDefinitiveId as net_defhc_id
+            ,  p.ProfileName as defhc_name
+            ,  netp.ProfileName as net_defhc_name
+            
+            , {network_flag('p.NetworkDefinitiveId', INPUT_NETWORK)}
+
+    
+    from   df_nearby_hcos_npi_vw hn
+
+           left   join MartDim.D_Organization o 
+           on     hn.npi = o.npi and
+                  o.ActiveRecordInd is True 
+                  
+           left   join MartDim.D_Profile p 
+           on     o.DefinitiveId = p.DefinitiveId
+           
+           left   join MartDim.D_Profile netp
+           on     p.NetworkDefinitiveId = netp.DefinitiveId
+""")
+
+pyspark_to_hive(df_nearby_hcos_npi,
+               f"{TMP_DATABASE}.nearby_hcos_npi")
 
 # COMMAND ----------
 
 # print sample of records
 
-hive_sample(f"{TMP_DATABASE}.nearby_npis")
+hive_sample(f"{TMP_DATABASE}.nearby_hcos_npi")
 
 # COMMAND ----------
 
@@ -354,29 +421,15 @@ hive_sample(f"{TMP_DATABASE}.nearby_npis")
 
 # COMMAND ----------
 
-# TODO: update to get PRIMARY affiliation only, but tbd on specifying primary affiliation for given firm type
-
-affiliations = spark.sql(f"""
-
-    select distinct physician_npi 
-    from   hcp_affiliations.physician_org_affiliations
-    
-    where  include_flag = 1 and
-           defhc_id = {DEFHC_ID} and
-           current_flag = 1
-    """)
-
-affiliations.createOrReplaceTempView('affiliations_vw')
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC 
 # MAGIC #### 3A. Master claims table
 
 # COMMAND ----------
 
-# create master claims table with nearby npis, create flag for in-network and pos_cat from lookup table
+# create master claims table by joining claims to nearby HCO NPIs
+# join to imputed payer table to get payer info
+# join to POS and specialty tables to get pos_cat and assign PCP vs specialist category
 
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
@@ -384,44 +437,34 @@ df_mxclaims_master = spark.sql(f"""
         ,  mc.ClaimTypeCd
         ,  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') as mxclaimdatekey
         ,  mc.PatientId 
-        ,  mc.PlaceOfServiceCd 
-        ,  mc.StatementStartDateKey
-        ,  mc.StatementEndDateKey
-        ,  mc.AdmissionDateKey
-        
-        ,  p.DefinitiveId as defhc_id 
-        ,  p.NetworkDefinitiveId as net_defhc_id
-        ,  p.ProfileName as defhc_name
-        ,  netp.ProfileName as net_defhc_name
-        
-        ,  pm.defhc_id as payer_id 
-        ,  pm.defhc_name as payer_name
-        
-        ,  np.zip
-        
+        ,  mc.PlaceOfServiceCd
         ,  mc.PatientClaimZip3Cd as patient_zip3
         ,  mc.RenderingProviderNPI 
         ,  mc.BillingProviderNPI 
         ,  mc.FacilityNPI 
         
-        , {network_flag('p.NetworkDefinitiveId', INPUT_NETWORK)}
+        ,  np.zip 
+        ,  np.defhc_id 
+        ,  np.net_defhc_id
+        ,  np.defhc_name
+        ,  np.net_defhc_name
+        ,  np.network_flag
+        
+        ,  pm.defhc_id as payer_id 
+        ,  pm.defhc_name as payer_name
+        
+         , case when prov.PrimarySpecialty in ({PCP_LIST}) then 1
+                when prov.PrimarySpecialty in ({SPECIALIST_LIST}) then 0
+                else null
+                end as pcp_flag
         
         , pos.pos_cat
         
-    from   {TMP_DATABASE}.nearby_npis np
+    from   MxMart.F_MxClaim_v2 mc 
+           inner join
+           {TMP_DATABASE}.nearby_hcos_npi np
+           on np.NPI = ifnull(mc.FacilityNPI, mc.BillingProviderNPI)
     
-           inner   join MxMart.F_MxClaim_v2 mc
-           on           np.NPI = ifnull(mc.FacilityNPI, mc.BillingProviderNPI)
-    
-           left   join MartDim.D_Organization o 
-           on     np.npi = o.npi and
-                  o.ActiveRecordInd is True 
-                  
-           left   join MartDim.D_Profile p 
-           on     o.DefinitiveId = p.DefinitiveId
-           
-           left   join MartDim.D_Profile netp
-           on     p.NetworkDefinitiveId = netp.DefinitiveId
            
            left   join ds_payer_mastering.mx_claims_imputed_payers pay 
            on     mc.DHCClaimId = pay.DHCClaimId and
@@ -430,6 +473,9 @@ df_mxclaims_master = spark.sql(f"""
                   
            left   join ds_payer_mastering.encoded_payer_id_mapping pm 
            on     pay.dh_encoded_id = pm.dh_encoded_id 
+           
+           left join  MartDim.D_Provider prov
+           on         mc.RenderingProviderNPI = prov.NPI
            
            left   join {DATABASE}.pos_category_assign pos
            on     mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
@@ -513,13 +559,13 @@ df_referrals = spark.sql(f"""
         ,  rend_network_id
         ,  ref_network_id
         ,  network_flag
-        ,  b.PrimarySpecialty
+        ,  b.pcp_flag
     from   referrals_vw a
 
-           inner join {TMP_DATABASE}.nearby_hcps b
-           on a.ref_npi = b.npi
+     inner join {TMP_DATABASE}.nearby_hcps b
+     on a.ref_npi = b.npi
            
-    where  b.PrimarySpecialty in ({PCP_LIST})     
+    where  b.pcp_flag = 1
 
 """)
 
@@ -544,36 +590,21 @@ hive_sample(f"{TMP_DATABASE}.{PCP_REFS_TBL}")
 
 # COMMAND ----------
 
-# create a table of claims from affiliated providers only:
-#  join to primary specialty to add PCP vs specialist indicator
-#  create network_flag
+# create a table of claims from affiliated providers only
 
 aff_claims = spark.sql(f"""
-    select /*+ BROADCAST(pos) */
-           a.DHCClaimId
+    select a.DHCClaimId
         ,  a.net_defhc_id 
         ,  a.network_flag
         ,  a.PatientId
         ,  a.RenderingProviderNPI 
-        ,  c.PrimarySpecialty
-        ,  a.PlaceOfServiceCd
-        ,  pos.pos_cat
-        
-        ,  case when PrimarySpecialty in ({PCP_LIST}) then 1
-                when PrimarySpecialty in ({SPECIALIST_LIST}) then 0
-                else null
-                end as pcp_flag
+        ,  a.pcp_flag
+        ,  a.pos_cat
         
     from   {TMP_DATABASE}.{MX_CLMS_TBL} a 
     
-    inner join  affiliations_vw b 
+    inner join  (select physician_npi, defhc_id_primary from prim_aff_vw where defhc_id_primary = {DEFHC_ID}) b 
     on          a.RenderingProviderNPI = b.physician_npi 
-    
-    left join  MartDim.D_Provider c
-    on         b.physician_npi = c.NPI
-    
-   left   join {DATABASE}.pos_category_assign pos
-   on     a.PlaceOfServiceCd = pos.PlaceOfServiceCd
 
 """)
 
@@ -582,8 +613,7 @@ aff_claims = spark.sql(f"""
 # save to temp database
 
 pyspark_to_hive(aff_claims,
-               f"{TMP_DATABASE}.{AFF_CLMS_TBL}",
-               overwrite_schema='true')
+               f"{TMP_DATABASE}.{AFF_CLMS_TBL}")
 
 # COMMAND ----------
 
@@ -593,33 +623,69 @@ hive_sample(f"{TMP_DATABASE}.{AFF_CLMS_TBL}")
 
 # COMMAND ----------
 
-# ALL freqs to check column creation for initial testing
+# create exit function to run either before QC checks or after based on RUN_QC
+
+def exit():
+    exit_notebook(f"All provider and claims tables created for {DEFHC_ID}!",
+              fail=False)
+
+# COMMAND ----------
+
+if RUN_QC==0:
+    exit()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC ### 4. QC Frequencies
+
+# COMMAND ----------
+
+# HCO IDs: freq of firm type
+
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_id"), ['FirmTypeName'])
+
+# COMMAND ----------
+
+# HCP: look at creation of affiliated and PCP flags
+
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['affiliated_flag', 'defhc_id_primary'])
+
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['pcp_flag', 'PrimarySpecialty'], order='cols', maxobs=100)
+
+# COMMAND ----------
+
+# HCO NPIs: creation of network_flag
+
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"), ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', with_pct=True, maxobs=100)
+
+# COMMAND ----------
 
 # CLAIMS: look at % null for joined on cols
+
+sdf_claims = hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
 
 COLS = ['defhc_id', 'net_defhc_id', 'payer_id', 'payer_name']
 
 for col in COLS:
     
-    df_mxclaims_master = add_null_indicator(df_mxclaims_master, col)
+    sdf_claims = add_null_indicator(sdf_claims, col)
     
-    sdf_frequency(df_mxclaims_master, [f"{col}_null"], with_pct=True)
-
-# CLAIMS: crosstabs of network by network flag, pos_cat by pos
-
-sdf_frequency(df_mxclaims_master, ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', with_pct=True, maxobs=100)
-
-sdf_frequency(df_mxclaims_master, ['pos_cat', 'PlaceOfServiceCd'], order='cols', with_pct=True, maxobs=100)
-
-# REFERRALS: crosstab of network by network flag
-
-sdf_frequency(df_referrals, ['rend_network_id', 'network_flag'], with_pct=True, maxobs=100)
-
-# AFFILIATIONS: look at crosstabs for creation of flags
-
-sdf_frequency(aff_claims, ['pcp_flag', 'PrimarySpecialty'], order='cols', with_pct='True', maxobs=100)
+    sdf_frequency(sdf_claims, [f"{col}_null"], with_pct=True)
 
 # COMMAND ----------
 
-exit_notebook(f"All provider and claims tables created for {DEFHC_ID}!",
-              fail=False)
+# CLAIMS: crosstabs of pos_cat by pos
+
+sdf_frequency(sdf_claims, ['pos_cat', 'PlaceOfServiceCd'], order='cols', with_pct=True, maxobs=100)
+
+# COMMAND ----------
+
+# REFERRALS: crosstab of network by network flag
+
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"), ['rend_network_id', 'network_flag'], with_pct=True, maxobs=100)
+
+# COMMAND ----------
+
+exit()

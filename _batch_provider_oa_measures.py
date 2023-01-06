@@ -3,14 +3,14 @@
 # MAGIC 
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
 # MAGIC 
-# MAGIC ## Provider Dashboard: Batch Submit
+# MAGIC ## Provider OA Measures: Batch Submit
 # MAGIC 
-# MAGIC **Program:** _batch_provider_pipeline
+# MAGIC **Program:** _batch_provider_oa_measures
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
 # MAGIC <br>
 # MAGIC <br>
-# MAGIC **Description:** Driver program to submit all notebooks for creation of provider dashboard metrics <br>
+# MAGIC **Description:** Driver program to submit all notebooks for creation of provider OA metrics <br>
 
 # COMMAND ----------
 
@@ -22,7 +22,7 @@ import ast
 
 # COMMAND ----------
 
-RUN_VALUES = get_widgets(include_widgets = list(range(0,6)))
+RUN_VALUES = get_widgets(include_widgets = list(range(0,7)))
 RUN_ARGUMENTS = {v[0]: v[1] for k, v in RUN_VALUES.items()}
 
 RUN_SETUP, DATABASE = return_widget_values(RUN_VALUES, ['RUN_SETUP' , 'DATABASE'])
@@ -59,7 +59,3 @@ notebook_returns_passthrough(returns_dict = returns,
 # TODO: add specific returns
 
 dbutils.notebook.run('005_dashboard', 0, arguments = RUN_ARGUMENTS)
-
-# COMMAND ----------
-
-

@@ -16,9 +16,9 @@
 # MAGIC 
 # MAGIC **Inputs**:
 # MAGIC   - {TMP_DATABASE}.input_org_info
-# MAGIC   - {TMP_DATABASE}.nearby_hcos
+# MAGIC   - {TMP_DATABASE}.nearby_hcos_id
 # MAGIC   - {TMP_DATABASE}.nearby_hcps
-# MAGIC   - {TMP_DATABASE}.nearby_npis
+# MAGIC   - {TMP_DATABASE}.nearby_hcos_npi
 # MAGIC   - {TMP_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
 # MAGIC   - {TMP_DATABASE}.{AFF_CLMS_TBL}
@@ -51,7 +51,7 @@ from functools import partial
 
 RUN_VALUES = get_widgets()
 
-DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE'])
+DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC'])
 
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
@@ -113,7 +113,7 @@ cnt_patient.display()
 cnt_inpat_hosp = spark.sql(f"""
 
     select count(distinct a.defhc_id) as cnt_ip_hospitals
-    from   {TMP_DATABASE}.nearby_hcos a 
+    from   {TMP_DATABASE}.nearby_hcos_id a 
     
     inner join  MartDim.D_Organization b 
     on     a.defhc_id = b.DefinitiveId 
@@ -143,7 +143,7 @@ hco_summary = spark.sql(f"""
          , FacilityTypeName
          , count(distinct defhc_id) as providers
     
-    from   {TMP_DATABASE}.nearby_hcos
+    from   {TMP_DATABASE}.nearby_hcos_id
     
     group by FirmTypeName
             , FacilityTypeName
