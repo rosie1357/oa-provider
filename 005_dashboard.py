@@ -289,7 +289,7 @@ def hosp_asc_counts(defhc, defhc_value, max_row):
                 select {defhc}_id
                        , {defhc}_name as {defhc}_name_raw
                        , pos_cat as place_of_service
-                       , count(distinct patientid) as cnt_claims
+                       , count(*) as cnt_claims
 
                 from {TMP_DATABASE}.{MX_CLMS_TBL}
                 where pos_cat in ('ASC & HOPD', 'Hospital Inpatient')
@@ -495,7 +495,3 @@ SELECT network_flag
 page1_vis90_inpat_stay = create_final_output_func(patient_visits_after_inpatient)
 
 insert_into_output_func(page1_vis90_inpat_stay.sort('network_flag', 'place_of_service'), f"{DATABASE}.page1_vis90_inpat_stay")
-
-# COMMAND ----------
-
-

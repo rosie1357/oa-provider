@@ -38,11 +38,12 @@ def affiliated_flag(affiliation_col, affiliation_value):
     Function affiliated_flag() to create col affiliated_flag based on affiliation ID column and literal value
     params:
         affiliation_col str: name of column with affiliation (defhc_id) values to match against
-        affiliation_value int: value to match against to indicate out-of-network
+        affiliation_value int: value to match against to affiliated/competitor/independent
   
     """
     
     return f"""case when {affiliation_col} = {affiliation_value} then 'Affiliated'
-             else 'Unaffiliated'
-             end as affiliated_flag
+               when {affiliation_col} is not null then 'Competitor'
+               else 'Independent'
+               end as affiliated_flag
          """
