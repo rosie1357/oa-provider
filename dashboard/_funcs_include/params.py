@@ -22,11 +22,27 @@ def network_flag(network_col, network_value):
     Function network_flag() to create col network_flag based on network col name and literal value
     params:
         network_col str: name of column with network values to match against
-        network_value int: value to
+        network_value int: value to match against to indicate in-network
   
     """
     
     return f"""case when {network_col} = {network_value} then 'In-Network'
              else 'Out-of-Network'
              end as network_flag
+         """
+
+# COMMAND ----------
+
+def affiliated_flag(affiliation_col, affiliation_value):
+    """
+    Function affiliated_flag() to create col affiliated_flag based on affiliation ID column and literal value
+    params:
+        affiliation_col str: name of column with affiliation (defhc_id) values to match against
+        affiliation_value int: value to match against to indicate out-of-network
+  
+    """
+    
+    return f"""case when {affiliation_col} = {affiliation_value} then 'Affiliated'
+             else 'Unaffiliated'
+             end as affiliated_flag
          """

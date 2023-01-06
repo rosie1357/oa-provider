@@ -22,7 +22,7 @@ import ast
 
 # COMMAND ----------
 
-RUN_VALUES = get_widgets(include_widgets = list(range(0,6)))
+RUN_VALUES = get_widgets(include_widgets = list(range(0,7)))
 RUN_ARGUMENTS = {v[0]: v[1] for k, v in RUN_VALUES.items()}
 
 RUN_SETUP, DATABASE = return_widget_values(RUN_VALUES, ['RUN_SETUP' , 'DATABASE'])
@@ -59,7 +59,3 @@ notebook_returns_passthrough(returns_dict = returns,
 # TODO: add specific returns
 
 dbutils.notebook.run('005_dashboard', 0, arguments = RUN_ARGUMENTS)
-
-# COMMAND ----------
-
-
