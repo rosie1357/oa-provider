@@ -5,7 +5,7 @@
 
 # COMMAND ----------
 
-# MAGIC %run /Shared/Data_Science/Users/rmalsberger/_general_funcs/_include_all_funcs
+# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/_include_all_funcs
 
 # COMMAND ----------
 
