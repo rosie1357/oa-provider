@@ -3,14 +3,14 @@
 # MAGIC 
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
 # MAGIC 
-# MAGIC ## Provider Dashboard: Batch Submit
+# MAGIC ## Provider OA Measures: Batch Submit
 # MAGIC 
-# MAGIC **Program:** _batch_provider_pipeline
+# MAGIC **Program:** _batch_provider_oa_measures
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
 # MAGIC <br>
 # MAGIC <br>
-# MAGIC **Description:** Driver program to submit all notebooks for creation of provider dashboard metrics <br>
+# MAGIC **Description:** Driver program to submit all notebooks for creation of provider OA metrics <br>
 
 # COMMAND ----------
 
