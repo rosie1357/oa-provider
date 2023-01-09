@@ -15,6 +15,9 @@
 # MAGIC 
 # MAGIC **NOTE**: DATABASE param below is value extracted from database widget
 # MAGIC 
+# MAGIC **Inputs**:
+# MAGIC   - /dbfs/FileStore/datascience/oa_provider/Appendix_1__Provider_OA___Specialist_vs_PCP_Assignment.xlsx
+# MAGIC 
 # MAGIC **Outputs** (Lookup tables):
 # MAGIC   - {DATABASE}.pcp_spec_assign
 # MAGIC   - {DATABASE}.pos_category_assign
@@ -59,82 +62,21 @@ LOOKUP_TABLES = [f"{DATABASE}.pcp_spec_assign",
 
 # COMMAND ----------
 
-# create lookup table with specialist types and specialist/PCP flag
+# import lookup table, rename cols to save in hive
 
-specialist_list = ['Allergy/Immunology'
-               , 'Audiology'
-               , 'Cardiac Electrophysiology'
-               , 'Cardiac Surgery'
-               , 'Cardiology'
-               , 'Clinical Neuropsychology'
-               , 'Colorectal Surgery'
-               , 'Dermatology'
-               , 'Endocrinology'
-               , 'Foot and Ankle Surgery'
-               , 'Gastroenterology'
-               , 'General Surgery'
-               , 'Gynecological Oncology'
-               , 'Hand Surgery'
-               , 'Hematology'
-               , 'Infectious Disease'
-               , 'Interventional Cardiology'
-               , 'Medical Oncology'
-               , 'Nephrology'
-               , 'Neurology'
-               , 'Neurosurgery'
-               , 'Obstetrics/Gynecology'
-               , 'Oncology'
-               , 'Oral and Maxillofacial Surgery'
-               , 'Orthopedic Surgery'
-               , 'Otolaryngology'
-               , 'Pediatric Allergy/Immunology'
-               , 'Pediatric Cardiology'
-               , 'Pediatric Endocrinology'
-               , 'Pediatric Gastroenterology'
-               , 'Pediatric Infectious Disease'
-               , 'Pediatric Nephrology'
-               , 'Pediatric Neurology'
-               , 'Pediatric Oncology'
-               , 'Pediatric Orthopedic Surgery'
-               , 'Pediatric Otolaryngology'
-               , 'Pediatric Pulmonology'
-               , 'Pediatric Rheumatology'
-               , 'Pediatric Surgery'
-               , 'Pediatric Urology'
-               , 'Plastic and Reconstructive Surgery'
-               , 'Podiatry'
-               , 'Pulmonology'
-               , 'Radiation Oncology'
-               , 'Reproductive Endocrinology'
-               , 'Rheumatology'
-               , 'Surgical Oncology'
-               , 'Thoracic Surgery'
-               , 'Trauma Surgery'
-               , 'Urology'
-               , 'Vascular Surgery']
+spec_df = pd.read_excel("/dbfs/FileStore/datascience/oa_provider/Appendix_1__Provider_OA___Specialist_vs_PCP_Assignment.xlsx")
+spec_df.head()
 
-
-pcp_list = ['Internal Medicine'
-          , 'Pediatric Medicine'
-          , 'Family Practice'
-          , 'Adult Medicine'
-          , 'Adolescent Medicine'
-          , 'Geriatric Medicine']
-
-# COMMAND ----------
-
-# create df with pcp flag
-
-df = pd.concat([pd.DataFrame(specialist_list, columns = ['specialty']).assign(pcp=0),
-                pd.DataFrame(pcp_list, columns = ['specialty']).assign(pcp=1)
-               ])
+spec_df.columns = ['PrimarySpecialty', 'specialty_cat', 'specialty_type', 'include_pie']
 
 # COMMAND ----------
 
 # save to output table in database
 
-pyspark_to_hive(spark.createDataFrame(df),
+pyspark_to_hive(spark.createDataFrame(spec_df),
                LOOKUP_TABLES[0])
+
+hive_sample(LOOKUP_TABLES[0])
 
 # COMMAND ----------
 
