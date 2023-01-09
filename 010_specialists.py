@@ -16,15 +16,21 @@
 # MAGIC 
 # MAGIC **Inputs**:
 # MAGIC   - {TMP_DATABASE}.input_org_info
-# MAGIC   - {TMP_DATABASE}.nearby_hcos
+# MAGIC   - {TMP_DATABASE}.nearby_hcos_id
 # MAGIC   - {TMP_DATABASE}.nearby_hcps
-# MAGIC   - {TMP_DATABASE}.nearby_npis
+# MAGIC   - {TMP_DATABASE}.nearby_hcos_npi
 # MAGIC   - {TMP_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
 # MAGIC   - {TMP_DATABASE}.{AFF_CLMS_TBL}
 # MAGIC   - MartDim.D_Organization
 # MAGIC   - MxMart.F_MxClaim_v2
+# MAGIC   
+# MAGIC **Outputs** (inserted into):
 
 # COMMAND ----------
 
 # MAGIC %run ./_funcs_include/all_provider_funcs
+
+# COMMAND ----------
+
+
