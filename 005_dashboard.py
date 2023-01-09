@@ -227,8 +227,8 @@ insert_into_output_func(page1_toplevel_counts, f"{DATABASE}.page1_toplevel_count
 
 def hosp_asc_counts(defhc, defhc_value, max_row):
     """
-    Function hosp_asc_counts() to get aggregate patient counts for either pie chart (by network) or bar chart (by facility)
-        will subset claims to hospital and ASC pos, and get count of unique patients by pos_cat and defhc_id or net_defhc_id
+    Function hosp_asc_counts() to get aggregate claim counts for either pie chart (by network) or bar chart (by facility)
+        will subset claims to hospital and ASC pos, and get count of claims by pos_cat and defhc_id or net_defhc_id
         will create collapsed/formatted names and labels to collapse >4th or >5th positions (pie or bar, respectively)
         
     params:
@@ -237,7 +237,7 @@ def hosp_asc_counts(defhc, defhc_value, max_row):
         max_row int: value for max row to keep, all others are collapsed (4 or 5)
         
     returns:
-        spark df with patient counts at network or facility level
+        spark df with claim counts at network or facility level
     
     """
     
@@ -272,13 +272,13 @@ def hosp_asc_counts(defhc, defhc_value, max_row):
 
             select *
             
-                   -- create rn to order networks separately for hospital/ASC, with your network as 0, null IDs as 100 (ignore), and all others by patient counts
+                   -- create rn to order networks separately for hospital/ASC, with your network as 0, null IDs as 100 (ignore), and all others by claim counts
                    
                    ,case when {defhc}_id = {defhc_value} then 0 
                          when {defhc}_id is null then 100
                          else row_number() over (partition by place_of_service
                                                  order by case when {defhc}_id is null or {defhc}_id = {defhc_value} then 0 
-                                                               else cnt_patients 
+                                                               else cnt_claims 
                                                                end desc) 
                           end as rn
 
@@ -289,7 +289,7 @@ def hosp_asc_counts(defhc, defhc_value, max_row):
                 select {defhc}_id
                        , {defhc}_name as {defhc}_name_raw
                        , pos_cat as place_of_service
-                       , count(distinct patientid) as cnt_patients
+                       , count(*) as cnt_claims
 
                 from {TMP_DATABASE}.{MX_CLMS_TBL}
                 where pos_cat in ('ASC & HOPD', 'Hospital Inpatient')
@@ -330,7 +330,7 @@ hosp_asc_pie = spark.sql(f"""
     select  place_of_service
           , network_label
           , network_name
-          , count(distinct patientid) as count
+          , count(*) as count
           
    from (
 
@@ -387,8 +387,8 @@ hosp_asc_bar.filter(F.col('rn')<10).sort('place_of_service', 'rn').display()
 # call create final counts to join to base cols and add timestamp, and insert output for insert into table
 
 page1_hosp_asc_bar = hosp_asc_bar.filter(F.col('defhc_id_collapsed').isNotNull()) \
-                                  .select('place_of_service', 'facility_label', 'facility_name', 'cnt_patients') \
-                                  .withColumnRenamed('cnt_patients', 'count')
+                                  .select('place_of_service', 'facility_label', 'facility_name', 'cnt_claims') \
+                                  .withColumnRenamed('cnt_claims', 'count')
 
 page1_hosp_asc_bar = create_final_output_func(page1_hosp_asc_bar)
 
@@ -408,7 +408,7 @@ insert_into_output_func(page1_hosp_asc_bar.sort('place_of_service', 'facility_la
 aff_specs = spark.sql(f"""
 
     select network_flag
-           ,count(distinct patientid) as count
+           ,count(*) as count
            
     from {TMP_DATABASE}.{AFF_CLMS_TBL}
     where pcp_flag = 0 and
@@ -461,13 +461,6 @@ insert_into_output_func(page1_pcp_referrals.sort('network_flag'), f"{DATABASE}.p
 
 # COMMAND ----------
 
-# create temp view of all inpatient stays from master claims table, and join
-# by patientid back to full claims table where claim occurred between 1 and 90 days following inpatient stay
-
-
-
-# COMMAND ----------
-
 
 # TODO: fix the below, just using this original query to get tables populated with some counts 
 
@@ -491,7 +484,7 @@ AND a.mxclaimdatekey > t1.mxclaimdatekey
 )
 SELECT network_flag
        ,place_of_service
-       ,count(distinct patientid) as count 
+       ,count(*) as count 
  FROM t2 
  GROUP BY 1,2""")
 
@@ -502,7 +495,3 @@ SELECT network_flag
 page1_vis90_inpat_stay = create_final_output_func(patient_visits_after_inpatient)
 
 insert_into_output_func(page1_vis90_inpat_stay.sort('network_flag', 'place_of_service'), f"{DATABASE}.page1_vis90_inpat_stay")
-
-# COMMAND ----------
-
-
