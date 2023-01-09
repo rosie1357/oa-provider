@@ -21,7 +21,6 @@
 # MAGIC   - {TMP_DATABASE}.nearby_hcos_npi
 # MAGIC   - {TMP_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
-# MAGIC   - {TMP_DATABASE}.{AFF_CLMS_TBL}
 # MAGIC   - MartDim.D_Organization
 # MAGIC   - MxMart.F_MxClaim_v2
 # MAGIC   
@@ -55,7 +54,7 @@ DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(
 
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
-INPUT_NETWORK = hive_to_df(f"{TMP_DATABASE}.input_org_info").select('input_network').collect()[0][0]
+INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network'])
 
 # COMMAND ----------
 
@@ -402,7 +401,7 @@ insert_into_output_func(page1_hosp_asc_bar.sort('place_of_service', 'facility_la
 
 # COMMAND ----------
 
-# read in affiliated provider claims, subset to in/out-patient hospital and specialist provider
+# read in claim subset to affiliated specialists to include in pie chart, in/out-patient hospital and specialist provider
 # count number of unique patients by network_flag
 
 aff_specs = spark.sql(f"""
@@ -411,7 +410,9 @@ aff_specs = spark.sql(f"""
            ,count(*) as count
            
     from {TMP_DATABASE}.{AFF_CLMS_TBL}
-    where pcp_flag = 0 and
+    where specialty_type = 'Specialist' and
+          affiliated_flag = 'Affiliated' and
+          include_pie = 'Y' and
           pos_cat in ('Hospital Inpatient', 'ASC & HOPD')
           
     group by network_flag

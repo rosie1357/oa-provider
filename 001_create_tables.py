@@ -37,7 +37,6 @@
 # MAGIC   - {TMP_DATABASE}.nearby_npis
 # MAGIC   - {TMP_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
-# MAGIC   - {TMP_DATABASE}.{AFF_CLMS_TBL}
 
 # COMMAND ----------
 
@@ -52,22 +51,6 @@ RUN_VALUES = get_widgets()
 DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC'])
 
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
-
-# COMMAND ----------
-
-# get pcp and specialty lists
-
-PCP_LIST = list_lookup(intable = f"{DATABASE}.pcp_spec_assign",
-                       col = 'specialty', 
-                       subset_col = 'pcp',
-                       subset_value = 1
-                      ) 
-
-SPECIALIST_LIST = list_lookup(intable = f"{DATABASE}.pcp_spec_assign",
-                       col = 'specialty', 
-                       subset_col = 'pcp',
-                       subset_value = 0
-                      ) 
 
 # COMMAND ----------
 
@@ -328,22 +311,20 @@ hive_sample(f"{TMP_DATABASE}.nearby_hcos_id")
 # COMMAND ----------
 
 # join nearby_hcps_vw to d_provider to get provider info, and primary affiliations to get primary hospital affiliation
-# create pcp vs specialist flag
+# join to pcp/specialist table to get specialist info
 # create affiliated flag based on primary id flag
 
 df_nearby_hcps_spec = spark.sql(f"""
     select np.*
-        ,  ProviderName
-        ,  defhc_id_primary
-        ,  defhc_name_primary
+        ,  pv.ProviderName
+        ,  pa.defhc_id_primary
+        ,  pa.defhc_name_primary
         , {affiliated_flag('defhc_id_primary', DEFHC_ID)}
         
-        ,  PrimarySpecialty
+        ,  pv.PrimarySpecialty
         
-        ,  case when PrimarySpecialty in ({PCP_LIST}) then 1
-                when PrimarySpecialty in ({SPECIALIST_LIST}) then 0
-                else null
-                end as pcp_flag
+        , sp.specialty_cat
+        , sp.specialty_type
         
     from  nearby_hcps_vw np
 
@@ -352,6 +333,9 @@ df_nearby_hcps_spec = spark.sql(f"""
     
     left join   prim_aff_vw pa
     on          np.NPI = pa.physician_npi
+    
+    left join  {DATABASE}.pcp_spec_assign sp
+    on         pv.PrimarySpecialty = sp.PrimarySpecialty
 """)
 
 pyspark_to_hive(df_nearby_hcps_spec,
@@ -362,12 +346,6 @@ pyspark_to_hive(df_nearby_hcps_spec,
 # print sample of records
 
 hive_sample(f"{TMP_DATABASE}.nearby_hcps")
-
-# COMMAND ----------
-
-# look at crosstab of specialty vs pcp_flag
-
-sdf_frequency(df_nearby_hcps_spec, ['pcp_flag', 'PrimarySpecialty'], order='cols', maxobs=500, with_pct='True')
 
 # COMMAND ----------
 
@@ -427,12 +405,8 @@ hive_sample(f"{TMP_DATABASE}.nearby_hcos_npi")
 
 # COMMAND ----------
 
-# create master claims table by joining claims to nearby HCO NPIs
-# join to imputed payer table to get payer info
-# join to POS and specialty tables to get pos_cat and assign PCP vs specialist category
-
 df_mxclaims_master = spark.sql(f"""
-    select /*+ BROADCAST(pos) */
+    select /*+ BROADCAST(pos), BROADCAST(sp) */
            mc.DHCClaimId
         ,  mc.ClaimTypeCd
         ,  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') as mxclaimdatekey
@@ -453,10 +427,12 @@ df_mxclaims_master = spark.sql(f"""
         ,  pm.defhc_id as payer_id 
         ,  pm.defhc_name as payer_name
         
-         , case when prov.PrimarySpecialty in ({PCP_LIST}) then 1
-                when prov.PrimarySpecialty in ({SPECIALIST_LIST}) then 0
-                else null
-                end as pcp_flag
+        , sp.specialty_cat
+        , sp.specialty_type
+        , sp.include_pie
+                
+        , aff.defhc_id_primary as provider_primary_affiliation_id
+        , {affiliated_flag('aff.defhc_id_primary', DEFHC_ID)}
         
         , pos.pos_cat
         
@@ -477,8 +453,14 @@ df_mxclaims_master = spark.sql(f"""
            left join  MartDim.D_Provider prov
            on         mc.RenderingProviderNPI = prov.NPI
            
+           left join  prim_aff_vw aff
+           on         mc.RenderingProviderNPI = aff.physician_npi
+           
            left   join {DATABASE}.pos_category_assign pos
            on     mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
+           
+           left join  {DATABASE}.pcp_spec_assign sp
+           on         prov.PrimarySpecialty = sp.PrimarySpecialty
            
     where  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE}' and
            mc.MxClaimYear >= 2016 and
@@ -491,7 +473,7 @@ df_mxclaims_master = spark.sql(f"""
 # save to temp database
 
 pyspark_to_hive(df_mxclaims_master,
-               f"{TMP_DATABASE}.{MX_CLMS_TBL}")
+               f"{TMP_DATABASE}.{MX_CLMS_TBL}", overwrite_schema='true')
 
 # COMMAND ----------
 
@@ -507,11 +489,12 @@ hive_sample(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
 
 # COMMAND ----------
 
-# create temp view of stacked referrals (explit and explicit), create network flag
+# create temp view of stacked referrals (explit and explicit), create network flags for both rendering AND referring providers
 
 referrals = spark.sql(f"""
         select *
-               ,{network_flag('rend_network_id', INPUT_NETWORK)}
+               ,{network_flag('rend_network_id', INPUT_NETWORK, suffix='_rend')}
+               ,{network_flag('rend_network_id', INPUT_NETWORK, suffix='_ref')}
                      
        from (
         
@@ -547,7 +530,10 @@ referrals.createOrReplaceTempView('referrals_vw')
 
 # COMMAND ----------
 
-# create referrals by joining to nearby hcps and subsetting to those with PCP specialty
+# create referrals by joining to nearby hcps TWICE:
+#  want to subset to both rend AND ref providers nearby,
+#  and where referring provider is PCP and rendering provider is specialist
+
 
 df_referrals = spark.sql(f"""
     select patient_id
@@ -558,15 +544,33 @@ df_referrals = spark.sql(f"""
         ,  rend_pos
         ,  rend_network_id
         ,  ref_network_id
-        ,  network_flag
-        ,  b.pcp_flag
+        
+        ,  network_flag_ref
+        , ref.PrimarySpecialty as PrimarySpecialty_ref
+        , ref.specialty_cat as specialty_cat_ref
+        , ref.specialty_type as specialty_type_ref
+        , ref.ProviderName as name_ref
+        , ref.defhc_name_primary as affiliation_name_ref
+        
+        
+        ,  network_flag_rend
+        , rend.PrimarySpecialty as PrimarySpecialty_rend
+        , rend.specialty_cat as specialty_cat_rend
+        , rend.specialty_type as specialty_type_rend
+        , rend.ProviderName as name_rend
+        , rend.defhc_name_primary as affiliation_name_rend
+        
     from   referrals_vw a
 
-     inner join {TMP_DATABASE}.nearby_hcps b
-     on a.ref_npi = b.npi
+    inner join {TMP_DATABASE}.nearby_hcps ref
+    on a.ref_npi = ref.npi
+     
+    inner join {TMP_DATABASE}.nearby_hcps rend
+    on a.rend_npi = rend.npi
+    
+    where ref.specialty_type = 'PCP' and 
+          rend.specialty_type = 'Specialist'
            
-    where  b.pcp_flag = 1
-
 """)
 
 # COMMAND ----------
@@ -574,52 +578,13 @@ df_referrals = spark.sql(f"""
 # save to temp database
 
 pyspark_to_hive(df_referrals,
-               f"{TMP_DATABASE}.{PCP_REFS_TBL}")
+               f"{TMP_DATABASE}.{PCP_REFS_TBL}", overwrite_schema='true')
 
 # COMMAND ----------
 
 # print sample of records
 
 hive_sample(f"{TMP_DATABASE}.{PCP_REFS_TBL}")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC #### 3C. Affiliated provider claims
-
-# COMMAND ----------
-
-# create a table of claims from affiliated providers only
-
-aff_claims = spark.sql(f"""
-    select a.DHCClaimId
-        ,  a.net_defhc_id 
-        ,  a.network_flag
-        ,  a.PatientId
-        ,  a.RenderingProviderNPI 
-        ,  a.pcp_flag
-        ,  a.pos_cat
-        
-    from   {TMP_DATABASE}.{MX_CLMS_TBL} a 
-    
-    inner join  (select physician_npi, defhc_id_primary from prim_aff_vw where defhc_id_primary = {DEFHC_ID}) b 
-    on          a.RenderingProviderNPI = b.physician_npi 
-
-""")
-
-# COMMAND ----------
-
-# save to temp database
-
-pyspark_to_hive(aff_claims,
-               f"{TMP_DATABASE}.{AFF_CLMS_TBL}")
-
-# COMMAND ----------
-
-# print sample of records
-
-hive_sample(f"{TMP_DATABASE}.{AFF_CLMS_TBL}")
 
 # COMMAND ----------
 
@@ -652,7 +617,7 @@ sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_id"), ['FirmTypeName'])
 
 sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['affiliated_flag', 'defhc_id_primary'])
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['pcp_flag', 'PrimarySpecialty'], order='cols', maxobs=100)
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['specialty_type', 'PrimarySpecialty'], order='cols', maxobs=100)
 
 # COMMAND ----------
 
@@ -676,9 +641,11 @@ for col in COLS:
 
 # COMMAND ----------
 
-# CLAIMS: crosstabs of pos_cat by pos
+# CLAIMS: crosstabs of pos_cat by pos, affiliated flag vs ID
 
 sdf_frequency(sdf_claims, ['pos_cat', 'PlaceOfServiceCd'], order='cols', with_pct=True, maxobs=100)
+
+sdf_frequency(sdf_claims, ['affiliated_flag', 'defhc_id_primary'])
 
 # COMMAND ----------
 
