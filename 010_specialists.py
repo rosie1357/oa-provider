@@ -56,6 +56,10 @@ create_final_output_func = partial(create_final_output, base_sdf)
 
 insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE)
 
+# create partial for save to s3
+
+upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -85,13 +89,15 @@ page3_top_sdf = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, and load to s3
+
+TBL_NAME = f"{DATABASE}.page3_top_panel_specialists"
 
 page3_top_panel_specialists = create_final_output_func(page3_top_sdf)
 
-#insert_into_output_func(page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliated_flag'), f"{DATABASE}.page3_top_panel_specialists")
+insert_into_output_func(page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliated_flag'), TBL_NAME)
 
-page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliated_flag').display()
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -127,13 +133,15 @@ page3_shares_sdf = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, upload to s3
+
+TBL_NAME = f"{DATABASE}.page3_shares"
 
 page3_shares = create_final_output_func(page3_shares_sdf)
 
-#insert_into_output_func(page3_shares.sort('net_defhc_id', 'net_defhc_name', 'specialty_cat'), f"{DATABASE}.page3_shares")
+insert_into_output_func(page3_shares.sort('net_defhc_id', 'net_defhc_name', 'specialty_cat'), TBL_NAME)
 
-page3_shares.sort('net_defhc_id', 'net_defhc_name', 'specialty_cat').display()
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -171,10 +179,12 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, upload to s3
+
+TBL_NAME = f"{DATABASE}.page3_top_pcp_flow"
 
 page3_top_pcp_flow = create_final_output_func(page3_top_pcp_flow_sdf)
 
-#insert_into_output_func(page3_top_pcp_flow.sort('npi_pcp', 'npi_spec'), f"{DATABASE}.page3_top_pcp_flow")
+insert_into_output_func(page3_top_pcp_flow.sort('npi_pcp', 'npi_spec'), TBL_NAME)
 
-page3_top_pcp_flow.sort('npi_pcp', 'npi_spec').display()
+upload_to_s3_func(TBL_NAME)

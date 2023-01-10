@@ -67,6 +67,10 @@ create_final_output_func = partial(create_final_output, base_sdf)
 
 insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE)
 
+# create partial for save to s3
+
+upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -178,9 +182,9 @@ cnt_pg = firms_summary.filter(F.col('FirmTypeName')=='Physician Group').withColu
 
 nearby_hcps = hive_to_df(f"{TMP_DATABASE}.nearby_hcps")
 
-pcp_spec_summary = nearby_hcps.groupby('pcp_flag') \
+pcp_spec_summary = nearby_hcps.groupby('specialty_type') \
                               .agg(F.count(F.col('npi')).alias('cnt_providers')) \
-                              .sort('pcp_flag')
+                              .sort('specialty_type')
 
 pcp_spec_summary.display()
 
@@ -188,9 +192,9 @@ pcp_spec_summary.display()
 
 # extract pcp and spec counts (separately)
 
-cnt_spec = pcp_spec_summary.filter(F.col('pcp_flag')==0).withColumnRenamed('cnt_providers', 'cnt_specialists').select('cnt_specialists')
+cnt_spec = pcp_spec_summary.filter(F.col('specialty_type')=='Specialist').withColumnRenamed('cnt_providers', 'cnt_specialists').select('cnt_specialists')
 
-cnt_pcp = pcp_spec_summary.filter(F.col('pcp_flag')==1).withColumnRenamed('cnt_providers', 'cnt_pcps').select('cnt_pcps')
+cnt_pcp = pcp_spec_summary.filter(F.col('specialty_type')=='PCP').withColumnRenamed('cnt_providers', 'cnt_pcps').select('cnt_pcps')
 
 # COMMAND ----------
 
@@ -210,11 +214,15 @@ all_counts = cnt_patient.join(cnt_inpat_hosp) \
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
+
+TBL_NAME = f"{DATABASE}.page1_toplevel_counts"
 
 page1_toplevel_counts = create_final_output_func(all_counts)
 
-insert_into_output_func(page1_toplevel_counts, f"{DATABASE}.page1_toplevel_counts")
+insert_into_output_func(page1_toplevel_counts, TBL_NAME)
+
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -356,11 +364,15 @@ hosp_asc_pie = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, insert output for insert into table, and load to s3
+
+TBL_NAME = f"{DATABASE}.page1_hosp_asc_pie"
 
 page1_hosp_asc_pie = create_final_output_func(hosp_asc_pie)
 
-insert_into_output_func(page1_hosp_asc_pie.sort('place_of_service', 'network_label'), f"{DATABASE}.page1_hosp_asc_pie")
+insert_into_output_func(page1_hosp_asc_pie.sort('place_of_service', 'network_label'), TBL_NAME)
+
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -383,7 +395,9 @@ hosp_asc_bar.filter(F.col('rn')<10).sort('place_of_service', 'rn').display()
 # COMMAND ----------
 
 # keep needed cols, drop rows in >5th position for output, and
-# call create final counts to join to base cols and add timestamp, and insert output for insert into table
+# call create final counts to join to base cols and add timestamp, insert output for insert into table, and load to s3
+
+TBL_NAME = f"{DATABASE}.page1_hosp_asc_bar"
 
 page1_hosp_asc_bar = hosp_asc_bar.filter(F.col('defhc_id_collapsed').isNotNull()) \
                                   .select('place_of_service', 'facility_label', 'facility_name', 'cnt_claims') \
@@ -392,6 +406,8 @@ page1_hosp_asc_bar = hosp_asc_bar.filter(F.col('defhc_id_collapsed').isNotNull()
 page1_hosp_asc_bar = create_final_output_func(page1_hosp_asc_bar)
 
 insert_into_output_func(page1_hosp_asc_bar.sort('place_of_service', 'facility_label'), f"{DATABASE}.page1_hosp_asc_bar")
+
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -409,7 +425,7 @@ aff_specs = spark.sql(f"""
     select network_flag
            ,count(*) as count
            
-    from {TMP_DATABASE}.{AFF_CLMS_TBL}
+    from {TMP_DATABASE}.{MX_CLMS_TBL}
     where specialty_type = 'Specialist' and
           affiliated_flag = 'Affiliated' and
           include_pie = 'Y' and
@@ -421,11 +437,15 @@ aff_specs = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, and load to s3
+
+TBL_NAME = f"{DATABASE}.page1_aff_spec_loyalty"
 
 page1_aff_spec_loyalty = create_final_output_func(aff_specs)
 
-insert_into_output_func(page1_aff_spec_loyalty.sort('network_flag'), f"{DATABASE}.page1_aff_spec_loyalty")
+insert_into_output_func(page1_aff_spec_loyalty.sort('network_flag'), TBL_NAME)
+
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -438,21 +458,25 @@ insert_into_output_func(page1_aff_spec_loyalty.sort('network_flag'), f"{DATABASE
 # read in pcp referrals table and count total referrals by network_flag
 
 pcp_referrals = spark.sql(f"""
-    select network_flag
+    select network_flag_spec as network_flag
           ,count(*) as count
           
     from {TMP_DATABASE}.{PCP_REFS_TBL}
-    group by network_flag
-    order by network_flag
+    group by network_flag_spec
+    order by network_flag_spec
     """)
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
+
+TBL_NAME = f"{DATABASE}.page1_pcp_referrals"
 
 page1_pcp_referrals = create_final_output_func(pcp_referrals)
 
-insert_into_output_func(page1_pcp_referrals.sort('network_flag'), f"{DATABASE}.page1_pcp_referrals")
+insert_into_output_func(page1_pcp_referrals.sort('network_flag'), TBL_NAME)
+
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -491,8 +515,12 @@ SELECT network_flag
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
+
+TBL_NAME = f"{DATABASE}.page1_vis90_inpat_stay"
 
 page1_vis90_inpat_stay = create_final_output_func(patient_visits_after_inpatient)
 
-insert_into_output_func(page1_vis90_inpat_stay.sort('network_flag', 'place_of_service'), f"{DATABASE}.page1_vis90_inpat_stay")
+insert_into_output_func(page1_vis90_inpat_stay.sort('network_flag', 'place_of_service'), TBL_NAME)
+
+upload_to_s3_func(TBL_NAME)

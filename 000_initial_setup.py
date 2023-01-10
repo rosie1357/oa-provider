@@ -197,5 +197,67 @@ pyspark_to_hive(schema, f"{DATABASE}.page1_vis90_inpat_stay")
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 3B. Patients (Page 2)
+
+# COMMAND ----------
+
+# placeholder
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 3C. Specialists (Page 3)
+
+# COMMAND ----------
+
+# page3_top_panel_specialists
+
+schema = create_empty_output({'npi': IntegerType(),
+                              'name': StringType(),
+                              'specialty_cat': StringType(),
+                              'affiliated_flag': StringType(),
+                              'count_in_network': IntegerType(),
+                              'count_out_of_network': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page3_top_panel_specialists")
+
+# COMMAND ----------
+
+# page3_shares
+
+schema = create_empty_output({'net_defhc_id': IntegerType(),
+                              'net_defhc_name': StringType(),
+                              'specialty_cat': StringType(),
+                              'affiliated_flag': StringType(),
+                              'pos_cat': StringType(),
+                              'network_flag': StringType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page3_shares")
+
+# COMMAND ----------
+
+# page3_top_pcp_flow
+
+schema = create_empty_output({'npi_pcp': IntegerType(),
+                              'name_pcp': StringType(),
+                              'npi_spec': IntegerType(),
+                              'name_spec': StringType(),
+                              'specialty_cat_spec': StringType(),
+                              'affiliation_spec': StringType(),
+                              'affiliated_flag_spec': StringType(),
+                              'network_flag_spec': StringType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page3_top_pcp_flow")
+
+# COMMAND ----------
+
 exit_notebook(f"Initial setup run to create lookup tables: {', '.join(LOOKUP_TABLES)}",
               fail=False)
