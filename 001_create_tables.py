@@ -427,6 +427,8 @@ df_mxclaims_master = spark.sql(f"""
         ,  pm.defhc_id as payer_id 
         ,  pm.defhc_name as payer_name
         
+        , prov.PrimarySpecialty
+        , prov.ProviderName
         , sp.specialty_cat
         , sp.specialty_type
         , sp.include_pie
@@ -473,7 +475,7 @@ df_mxclaims_master = spark.sql(f"""
 # save to temp database
 
 pyspark_to_hive(df_mxclaims_master,
-               f"{TMP_DATABASE}.{MX_CLMS_TBL}", overwrite_schema='true')
+               f"{TMP_DATABASE}.{MX_CLMS_TBL}")
 
 # COMMAND ----------
 
@@ -493,8 +495,8 @@ hive_sample(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
 
 referrals = spark.sql(f"""
         select *
-               ,{network_flag('rend_network_id', INPUT_NETWORK, suffix='_rend')}
-               ,{network_flag('rend_network_id', INPUT_NETWORK, suffix='_ref')}
+               ,{network_flag('rend_network_id', INPUT_NETWORK, suffix='_spec')}
+               ,{network_flag('ref_network_id', INPUT_NETWORK, suffix='_pcp')}
                      
        from (
         
@@ -537,28 +539,30 @@ referrals.createOrReplaceTempView('referrals_vw')
 
 df_referrals = spark.sql(f"""
     select patient_id
-        ,  rend_npi
-        ,  rend_claim_date
-        ,  ref_npi 
-        ,  rend_fac_npi
-        ,  rend_pos
-        ,  rend_network_id
-        ,  ref_network_id
+        , rend_fac_npi
+        , rend_pos
         
-        ,  network_flag_ref
-        , ref.PrimarySpecialty as PrimarySpecialty_ref
-        , ref.specialty_cat as specialty_cat_ref
-        , ref.specialty_type as specialty_type_ref
-        , ref.ProviderName as name_ref
-        , ref.defhc_name_primary as affiliation_name_ref
+        , ref_npi as npi_pcp
+        , ref_network_id as network_id_pcp
+        , network_flag_pcp
         
+        , ref.PrimarySpecialty as PrimarySpecialty_pcp
+        , ref.specialty_cat as specialty_cat_pcp
+        , ref.specialty_type as specialty_type_pcp
+        , ref.ProviderName as name_pcp
+        , ref.affiliated_flag as affiliated_flag_pcp
+        , ref.defhc_name_primary as affiliation_pcp
         
-        ,  network_flag_rend
-        , rend.PrimarySpecialty as PrimarySpecialty_rend
-        , rend.specialty_cat as specialty_cat_rend
-        , rend.specialty_type as specialty_type_rend
-        , rend.ProviderName as name_rend
-        , rend.defhc_name_primary as affiliation_name_rend
+        , rend_npi as npi_spec
+        , rend_network_id as network_id_spec
+        , network_flag_spec
+        
+        , rend.PrimarySpecialty as PrimarySpecialty_spec
+        , rend.specialty_cat as specialty_cat_spec
+        , rend.specialty_type as specialty_type_spec
+        , rend.ProviderName as name_spec
+        , rend.affiliated_flag as affiliated_flag_spec
+        , rend.defhc_name_primary as affiliation_spec
         
     from   referrals_vw a
 
@@ -578,7 +582,7 @@ df_referrals = spark.sql(f"""
 # save to temp database
 
 pyspark_to_hive(df_referrals,
-               f"{TMP_DATABASE}.{PCP_REFS_TBL}", overwrite_schema='true')
+               f"{TMP_DATABASE}.{PCP_REFS_TBL}")
 
 # COMMAND ----------
 
