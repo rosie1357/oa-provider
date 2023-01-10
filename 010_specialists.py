@@ -108,6 +108,7 @@ page3_shares_sdf = spark.sql(f"""
            ,net_defhc_name
            ,specialty_cat
            ,affiliated_flag
+           ,pos_cat
            ,network_flag
            ,count(*) as count
            
@@ -119,6 +120,7 @@ page3_shares_sdf = spark.sql(f"""
            ,net_defhc_name
            ,specialty_cat
            ,affiliated_flag
+           ,pos_cat
            ,network_flag
          
 """)
