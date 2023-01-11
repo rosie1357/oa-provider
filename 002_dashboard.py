@@ -3,9 +3,9 @@
 # MAGIC 
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
 # MAGIC 
-# MAGIC ## Provider Dashboard: 005 Dashboard
+# MAGIC ## Provider Dashboard: 002 Dashboard
 # MAGIC 
-# MAGIC **Program:** 005_dashboard
+# MAGIC **Program:** 002_dashboard
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
 # MAGIC <br>
@@ -139,36 +139,29 @@ cnt_inpat_hosp.display()
 
 # COMMAND ----------
 
-# get count of distinct facilites by firm type and facility name
+# get count of distinct facilites by firm type
 
 hco_summary = spark.sql(f"""
     select FirmTypeName
-         , FacilityTypeName
-         , count(distinct defhc_id) as providers
+         , count(distinct defhc_id) as cnt_providers
     
     from   {TMP_DATABASE}.nearby_hcos_id
     
     group by FirmTypeName
-            , FacilityTypeName
+    order by FirmTypeName
 """)
 
 # COMMAND ----------
 
-# sum total providers by firm type
-
-firms_summary = hco_summary.groupBy('FirmTypeName') \
-                           .agg(F.sum(F.col('providers')).alias('cnt_providers')) \
-                           .sort('FirmTypeName')
-
-firms_summary.display()
+hco_summary.display()
 
 # COMMAND ----------
 
 # extract asc and PG counts (separately)
 
-cnt_asc = firms_summary.filter(F.col('FirmTypeName')=='Ambulatory Surgery Center').withColumnRenamed('cnt_providers', 'cnt_ascs').select('cnt_ascs')
+cnt_asc = hco_summary.filter(F.col('FirmTypeName')=='Ambulatory Surgery Center').withColumnRenamed('cnt_providers', 'cnt_ascs').select('cnt_ascs')
 
-cnt_pg = firms_summary.filter(F.col('FirmTypeName')=='Physician Group').withColumnRenamed('cnt_providers', 'cnt_pgs').select('cnt_pgs')
+cnt_pg = hco_summary.filter(F.col('FirmTypeName')=='Physician Group').withColumnRenamed('cnt_providers', 'cnt_pgs').select('cnt_pgs')
 
 # COMMAND ----------
 
@@ -329,7 +322,7 @@ hosp_asc_pie.filter(F.col('rn')<10).sort('place_of_service', 'rn').display()
 
 # COMMAND ----------
 
-# to get patient counts for pie chart, must join individual patients back to the above view to re-count unique patients for the collapsed 'Other' group
+# collapse all the networks in the "other" category
 # if there are 0 counts in the other group (<5 total networks for the given POS) delete the record(s)
 
 hosp_asc_pie = spark.sql(f"""
@@ -337,28 +330,15 @@ hosp_asc_pie = spark.sql(f"""
     select  place_of_service
           , network_label
           , network_name
-          , count(*) as count
+          , sum(cnt_claims) as count
           
-   from (
-
-        select a.*
-              , b.patientid
-
-        from hosp_asc_pie_vw a
-             left join
-             {TMP_DATABASE}.{MX_CLMS_TBL} b
-
-       on a.net_defhc_id = b.net_defhc_id and 
-          a.place_of_service = b.pos_cat
+    from hosp_asc_pie_vw
+    
+    group by place_of_service
+            , network_label
+            , network_name
           
-      )  c
-      
-  group by place_of_service
-          , network_label
-          , network_name
-          
-  having (count > 0) or (network_name != 'Other')
-          
+     having (count > 0) or (network_name != 'Other')     
      
     """)
 
@@ -417,7 +397,7 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
-# read in claim subset to affiliated specialists to include in pie chart, in/out-patient hospital and specialist provider
+# read in claim subset to affiliated specialists to include in pie chart, specialist provider
 # count number of unique patients by network_flag
 
 aff_specs = spark.sql(f"""
@@ -428,8 +408,7 @@ aff_specs = spark.sql(f"""
     from {TMP_DATABASE}.{MX_CLMS_TBL}
     where specialty_type = 'Specialist' and
           affiliated_flag = 'Affiliated' and
-          include_pie = 'Y' and
-          pos_cat in ('Hospital Inpatient', 'ASC & HOPD')
+          include_pie = 'Y'
           
     group by network_flag
 

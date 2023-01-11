@@ -3,9 +3,9 @@
 # MAGIC 
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
 # MAGIC 
-# MAGIC ## Provider Dashboard: 010 Specialists
+# MAGIC ## Provider Dashboard: 004 Specialists
 # MAGIC 
-# MAGIC **Program:** 010_specialists
+# MAGIC **Program:** 004_specialists
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
 # MAGIC <br>
@@ -86,7 +86,6 @@ page3_top_sdf = spark.sql(f"""
            ,rendering_npi_url
            ,specialty_cat
            ,affiliated_flag
-           
 """)
 
 # COMMAND ----------
@@ -116,7 +115,7 @@ page3_shares_sdf = spark.sql(f"""
            ,net_defhc_name
            ,specialty_cat
            ,affiliated_flag
-           ,pos_cat
+           ,pos_cat as place_of_service
            ,network_flag
            ,count(*) as count
            

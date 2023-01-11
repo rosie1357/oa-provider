@@ -19,7 +19,7 @@
 # MAGIC   - /dbfs/FileStore/datascience/oa_provider/Appendix_1__Provider_OA___Specialist_vs_PCP_Assignment.xlsx
 # MAGIC 
 # MAGIC **Outputs** (Lookup tables):
-# MAGIC   - {DATABASE}.pcp_spec_assign
+# MAGIC   - {DATABASE}.hcp_specialty_assignment
 # MAGIC   - {DATABASE}.pos_category_assign
 # MAGIC   
 # MAGIC **Outputs** (Empty tables for measure inserts):
@@ -51,7 +51,7 @@ DATABASE = return_widget_values(RUN_VALUES, ['DATABASE'])[0]
 
 # list of lookup tables to create
 
-LOOKUP_TABLES = [f"{DATABASE}.pcp_spec_assign",
+LOOKUP_TABLES = [f"{DATABASE}.hcp_specialty_assignment",
                  f"{DATABASE}.pos_category_assign"]
 
 # COMMAND ----------
@@ -65,9 +65,9 @@ LOOKUP_TABLES = [f"{DATABASE}.pcp_spec_assign",
 # import lookup table, rename cols to save in hive
 
 spec_df = pd.read_excel("/dbfs/FileStore/datascience/oa_provider/Appendix_1__Provider_OA___Specialist_vs_PCP_Assignment.xlsx")
-spec_df.head()
 
-spec_df.columns = ['PrimarySpecialty', 'specialty_cat', 'specialty_type', 'include_pie']
+spec_df.columns = ['specialty_id', 'specialty_name', 'specialty_cat', 'specialty_type', 'include_pie']
+spec_df.head()
 
 # COMMAND ----------
 
@@ -234,12 +234,12 @@ schema = create_empty_output({'net_defhc_id': IntegerType(),
                               'net_defhc_name': StringType(),
                               'specialty_cat': StringType(),
                               'affiliated_flag': StringType(),
-                              'pos_cat': StringType(),
+                              'place_of_service': StringType(),
                               'network_flag': StringType(),
                               'count': IntegerType()
                              })
 
-pyspark_to_hive(schema, f"{DATABASE}.page3_shares")
+pyspark_to_hive(schema, f"{DATABASE}.page3_shares", overwrite_schema='true')
 
 # COMMAND ----------
 
