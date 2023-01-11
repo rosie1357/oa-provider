@@ -313,6 +313,8 @@ hive_sample(f"{TMP_DATABASE}.nearby_hcos_id")
 # join nearby_hcps_vw to d_provider to get provider info, and primary affiliations to get primary hospital affiliation
 # join to pcp/specialist table to get specialist info
 # create affiliated flag based on primary id flag
+# create text link to physician page
+# link to physician page
 
 df_nearby_hcps_spec = spark.sql(f"""
     select np.*
@@ -325,6 +327,8 @@ df_nearby_hcps_spec = spark.sql(f"""
         
         , sp.specialty_cat
         , sp.specialty_type
+        
+        , concat("{PHYS_LINK}", np.npi) as npi_url
         
     from  nearby_hcps_vw np
 
@@ -437,6 +441,8 @@ df_mxclaims_master = spark.sql(f"""
         , {affiliated_flag('aff.defhc_id_primary', DEFHC_ID)}
         
         , pos.pos_cat
+        
+        , concat("{PHYS_LINK}", RenderingProviderNPI) as rendering_npi_url
         
     from   MxMart.F_MxClaim_v2 mc 
            inner join
@@ -552,6 +558,7 @@ df_referrals = spark.sql(f"""
         , ref.ProviderName as name_pcp
         , ref.affiliated_flag as affiliated_flag_pcp
         , ref.defhc_name_primary as affiliation_pcp
+        , ref.npi_url as npi_url_pcp
         
         , rend_npi as npi_spec
         , rend_network_id as network_id_spec
@@ -563,6 +570,7 @@ df_referrals = spark.sql(f"""
         , rend.ProviderName as name_spec
         , rend.affiliated_flag as affiliated_flag_spec
         , rend.defhc_name_primary as affiliation_spec
+        , rend.npi_url as npi_url_spec
         
     from   referrals_vw a
 
@@ -582,7 +590,7 @@ df_referrals = spark.sql(f"""
 # save to temp database
 
 pyspark_to_hive(df_referrals,
-               f"{TMP_DATABASE}.{PCP_REFS_TBL}")
+               f"{TMP_DATABASE}.{PCP_REFS_TBL}", overwrite_schema='true')
 
 # COMMAND ----------
 

@@ -73,6 +73,7 @@ upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, 
 page3_top_sdf = spark.sql(f"""
     select RenderingProviderNPI as npi
            ,ProviderName as name
+           ,rendering_npi_url as npi_url
            ,specialty_cat
            ,affiliated_flag
            ,sum(case when network_flag = 'In-Network' then 1 else 0 end) as count_in_network
@@ -82,6 +83,7 @@ page3_top_sdf = spark.sql(f"""
    where specialty_type = 'Specialist'
    group by RenderingProviderNPI
            ,ProviderName
+           ,rendering_npi_url
            ,specialty_cat
            ,affiliated_flag
            
@@ -157,8 +159,10 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
     
     select npi_pcp
            ,name_pcp
+           ,npi_url_pcp
            ,npi_spec
            ,name_spec
+           ,npi_url_spec
            ,specialty_cat_spec
            ,affiliation_spec
            ,affiliated_flag_spec
@@ -168,8 +172,10 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
     from {TMP_DATABASE}.{PCP_REFS_TBL}
     group by npi_pcp
            ,name_pcp
+           ,npi_url_pcp
            ,npi_spec
            ,name_spec
+           ,npi_url_spec
            ,specialty_cat_spec
            ,affiliation_spec
            ,affiliated_flag_spec

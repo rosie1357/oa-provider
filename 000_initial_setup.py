@@ -217,6 +217,7 @@ pyspark_to_hive(schema, f"{DATABASE}.page1_vis90_inpat_stay")
 
 schema = create_empty_output({'npi': IntegerType(),
                               'name': StringType(),
+                              'npi_url': StringType(),
                               'specialty_cat': StringType(),
                               'affiliated_flag': StringType(),
                               'count_in_network': IntegerType(),
@@ -246,8 +247,10 @@ pyspark_to_hive(schema, f"{DATABASE}.page3_shares")
 
 schema = create_empty_output({'npi_pcp': IntegerType(),
                               'name_pcp': StringType(),
+                              'npi_url_pcp': StringType(),
                               'npi_spec': IntegerType(),
                               'name_spec': StringType(),
+                              'npi_url_spec': StringType(),
                               'specialty_cat_spec': StringType(),
                               'affiliation_spec': StringType(),
                               'affiliated_flag_spec': StringType(),

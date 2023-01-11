@@ -11,6 +11,12 @@ S3_KEY = 'oppurtunity-assesment/clientdata'
 
 # COMMAND ----------
 
+# link to physician page
+
+PHYS_LINK = "https://www.defhc.com/physicians/"
+
+# COMMAND ----------
+
 # variables to hold names of base tables
 
 MX_CLMS_TBL = 'mxclaims_master'
