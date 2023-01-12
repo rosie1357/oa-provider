@@ -3,9 +3,9 @@
 # MAGIC 
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
 # MAGIC 
-# MAGIC ## Provider Dashboard: 010 Specialists
+# MAGIC ## Provider Dashboard: 004 Specialists
 # MAGIC 
-# MAGIC **Program:** 010_specialists
+# MAGIC **Program:** 004_specialists
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
 # MAGIC <br>
@@ -56,6 +56,10 @@ create_final_output_func = partial(create_final_output, base_sdf)
 
 insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE)
 
+# create partial for save to s3
+
+upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -69,6 +73,7 @@ insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DA
 page3_top_sdf = spark.sql(f"""
     select RenderingProviderNPI as npi
            ,ProviderName as name
+           ,rendering_npi_url as npi_url
            ,specialty_cat
            ,affiliated_flag
            ,sum(case when network_flag = 'In-Network' then 1 else 0 end) as count_in_network
@@ -78,20 +83,22 @@ page3_top_sdf = spark.sql(f"""
    where specialty_type = 'Specialist'
    group by RenderingProviderNPI
            ,ProviderName
+           ,rendering_npi_url
            ,specialty_cat
            ,affiliated_flag
-           
 """)
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, and load to s3
+
+TBL_NAME = f"{DATABASE}.page3_top_panel_specialists"
 
 page3_top_panel_specialists = create_final_output_func(page3_top_sdf)
 
-#insert_into_output_func(page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliated_flag'), f"{DATABASE}.page3_top_panel_specialists")
+insert_into_output_func(page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliated_flag'), TBL_NAME)
 
-page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliated_flag').display()
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -108,7 +115,7 @@ page3_shares_sdf = spark.sql(f"""
            ,net_defhc_name
            ,specialty_cat
            ,affiliated_flag
-           ,pos_cat
+           ,pos_cat as place_of_service
            ,network_flag
            ,count(*) as count
            
@@ -127,13 +134,15 @@ page3_shares_sdf = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, upload to s3
+
+TBL_NAME = f"{DATABASE}.page3_shares"
 
 page3_shares = create_final_output_func(page3_shares_sdf)
 
-#insert_into_output_func(page3_shares.sort('net_defhc_id', 'net_defhc_name', 'specialty_cat'), f"{DATABASE}.page3_shares")
+insert_into_output_func(page3_shares.sort('net_defhc_id', 'net_defhc_name', 'specialty_cat'), TBL_NAME)
 
-page3_shares.sort('net_defhc_id', 'net_defhc_name', 'specialty_cat').display()
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -149,8 +158,10 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
     
     select npi_pcp
            ,name_pcp
+           ,npi_url_pcp
            ,npi_spec
            ,name_spec
+           ,npi_url_spec
            ,specialty_cat_spec
            ,affiliation_spec
            ,affiliated_flag_spec
@@ -160,8 +171,10 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
     from {TMP_DATABASE}.{PCP_REFS_TBL}
     group by npi_pcp
            ,name_pcp
+           ,npi_url_pcp
            ,npi_spec
            ,name_spec
+           ,npi_url_spec
            ,specialty_cat_spec
            ,affiliation_spec
            ,affiliated_flag_spec
@@ -171,10 +184,12 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, upload to s3
+
+TBL_NAME = f"{DATABASE}.page3_top_pcp_flow"
 
 page3_top_pcp_flow = create_final_output_func(page3_top_pcp_flow_sdf)
 
-#insert_into_output_func(page3_top_pcp_flow.sort('npi_pcp', 'npi_spec'), f"{DATABASE}.page3_top_pcp_flow")
+insert_into_output_func(page3_top_pcp_flow.sort('npi_pcp', 'npi_spec'), TBL_NAME)
 
-page3_top_pcp_flow.sort('npi_pcp', 'npi_spec').display()
+upload_to_s3_func(TBL_NAME)

@@ -16,7 +16,7 @@
 # MAGIC **NOTE**: DATABASE and TMP_DATABASE params below are value extracted from database widget, value passed to TMP_DATABASE() lambda func param, tbl var names specified in params
 # MAGIC 
 # MAGIC **Inputs**:
-# MAGIC   - {DATABASE}.pcp_spec_assign
+# MAGIC   - {DATABASE}.hcp_specialty_assignment
 # MAGIC   - {DATABASE}.pos_category_assign
 # MAGIC   - definitivehc.hospital_all_companies
 # MAGIC   - npi_hco_mapping.dhc_pg_location_addresses
@@ -313,6 +313,8 @@ hive_sample(f"{TMP_DATABASE}.nearby_hcos_id")
 # join nearby_hcps_vw to d_provider to get provider info, and primary affiliations to get primary hospital affiliation
 # join to pcp/specialist table to get specialist info
 # create affiliated flag based on primary id flag
+# create text link to physician page
+# link to physician page
 
 df_nearby_hcps_spec = spark.sql(f"""
     select np.*
@@ -326,6 +328,8 @@ df_nearby_hcps_spec = spark.sql(f"""
         , sp.specialty_cat
         , sp.specialty_type
         
+        , concat("{PHYS_LINK}", np.npi) as npi_url
+        
     from  nearby_hcps_vw np
 
     left join martdim.d_provider pv 
@@ -334,8 +338,8 @@ df_nearby_hcps_spec = spark.sql(f"""
     left join   prim_aff_vw pa
     on          np.NPI = pa.physician_npi
     
-    left join  {DATABASE}.pcp_spec_assign sp
-    on         pv.PrimarySpecialty = sp.PrimarySpecialty
+    left join  {DATABASE}.hcp_specialty_assignment sp
+    on         pv.PrimarySpecialty = sp.specialty_name
 """)
 
 pyspark_to_hive(df_nearby_hcps_spec,
@@ -438,6 +442,8 @@ df_mxclaims_master = spark.sql(f"""
         
         , pos.pos_cat
         
+        , concat("{PHYS_LINK}", RenderingProviderNPI) as rendering_npi_url
+        
     from   MxMart.F_MxClaim_v2 mc 
            inner join
            {TMP_DATABASE}.nearby_hcos_npi np
@@ -461,8 +467,8 @@ df_mxclaims_master = spark.sql(f"""
            left   join {DATABASE}.pos_category_assign pos
            on     mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
            
-           left join  {DATABASE}.pcp_spec_assign sp
-           on         prov.PrimarySpecialty = sp.PrimarySpecialty
+           left join  {DATABASE}.hcp_specialty_assignment sp
+           on         prov.PrimarySpecialty = sp.specialty_name
            
     where  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE}' and
            mc.MxClaimYear >= 2016 and
@@ -552,6 +558,7 @@ df_referrals = spark.sql(f"""
         , ref.ProviderName as name_pcp
         , ref.affiliated_flag as affiliated_flag_pcp
         , ref.defhc_name_primary as affiliation_pcp
+        , ref.npi_url as npi_url_pcp
         
         , rend_npi as npi_spec
         , rend_network_id as network_id_spec
@@ -563,6 +570,7 @@ df_referrals = spark.sql(f"""
         , rend.ProviderName as name_spec
         , rend.affiliated_flag as affiliated_flag_spec
         , rend.defhc_name_primary as affiliation_spec
+        , rend.npi_url as npi_url_spec
         
     from   referrals_vw a
 
@@ -582,7 +590,7 @@ df_referrals = spark.sql(f"""
 # save to temp database
 
 pyspark_to_hive(df_referrals,
-               f"{TMP_DATABASE}.{PCP_REFS_TBL}")
+               f"{TMP_DATABASE}.{PCP_REFS_TBL}", overwrite_schema='true')
 
 # COMMAND ----------
 
@@ -649,13 +657,13 @@ for col in COLS:
 
 sdf_frequency(sdf_claims, ['pos_cat', 'PlaceOfServiceCd'], order='cols', with_pct=True, maxobs=100)
 
-sdf_frequency(sdf_claims, ['affiliated_flag', 'defhc_id_primary'])
+sdf_frequency(sdf_claims, ['affiliated_flag', 'provider_primary_affiliation_id'])
 
 # COMMAND ----------
 
 # REFERRALS: crosstab of network by network flag
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"), ['rend_network_id', 'network_flag'], with_pct=True, maxobs=100)
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"), ['network_id_spec', 'network_flag_spec'], with_pct=True, maxobs=100)
 
 # COMMAND ----------
 

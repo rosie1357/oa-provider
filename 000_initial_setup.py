@@ -19,7 +19,7 @@
 # MAGIC   - /dbfs/FileStore/datascience/oa_provider/Appendix_1__Provider_OA___Specialist_vs_PCP_Assignment.xlsx
 # MAGIC 
 # MAGIC **Outputs** (Lookup tables):
-# MAGIC   - {DATABASE}.pcp_spec_assign
+# MAGIC   - {DATABASE}.hcp_specialty_assignment
 # MAGIC   - {DATABASE}.pos_category_assign
 # MAGIC   
 # MAGIC **Outputs** (Empty tables for measure inserts):
@@ -51,7 +51,7 @@ DATABASE = return_widget_values(RUN_VALUES, ['DATABASE'])[0]
 
 # list of lookup tables to create
 
-LOOKUP_TABLES = [f"{DATABASE}.pcp_spec_assign",
+LOOKUP_TABLES = [f"{DATABASE}.hcp_specialty_assignment",
                  f"{DATABASE}.pos_category_assign"]
 
 # COMMAND ----------
@@ -65,9 +65,9 @@ LOOKUP_TABLES = [f"{DATABASE}.pcp_spec_assign",
 # import lookup table, rename cols to save in hive
 
 spec_df = pd.read_excel("/dbfs/FileStore/datascience/oa_provider/Appendix_1__Provider_OA___Specialist_vs_PCP_Assignment.xlsx")
-spec_df.head()
 
-spec_df.columns = ['PrimarySpecialty', 'specialty_cat', 'specialty_type', 'include_pie']
+spec_df.columns = ['specialty_id', 'specialty_name', 'specialty_cat', 'specialty_type', 'include_pie']
+spec_df.head()
 
 # COMMAND ----------
 
@@ -194,6 +194,71 @@ schema = create_empty_output({'network_flag': StringType(),
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.page1_vis90_inpat_stay")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 3B. Patients (Page 2)
+
+# COMMAND ----------
+
+# placeholder
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 3C. Specialists (Page 3)
+
+# COMMAND ----------
+
+# page3_top_panel_specialists
+
+schema = create_empty_output({'npi': IntegerType(),
+                              'name': StringType(),
+                              'npi_url': StringType(),
+                              'specialty_cat': StringType(),
+                              'affiliated_flag': StringType(),
+                              'count_in_network': IntegerType(),
+                              'count_out_of_network': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page3_top_panel_specialists")
+
+# COMMAND ----------
+
+# page3_shares
+
+schema = create_empty_output({'net_defhc_id': IntegerType(),
+                              'net_defhc_name': StringType(),
+                              'specialty_cat': StringType(),
+                              'affiliated_flag': StringType(),
+                              'place_of_service': StringType(),
+                              'network_flag': StringType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page3_shares", overwrite_schema='true')
+
+# COMMAND ----------
+
+# page3_top_pcp_flow
+
+schema = create_empty_output({'npi_pcp': IntegerType(),
+                              'name_pcp': StringType(),
+                              'npi_url_pcp': StringType(),
+                              'npi_spec': IntegerType(),
+                              'name_spec': StringType(),
+                              'npi_url_spec': StringType(),
+                              'specialty_cat_spec': StringType(),
+                              'affiliation_spec': StringType(),
+                              'affiliated_flag_spec': StringType(),
+                              'network_flag_spec': StringType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page3_top_pcp_flow")
 
 # COMMAND ----------
 

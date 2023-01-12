@@ -6,6 +6,14 @@
 # COMMAND ----------
 
 BASEDIR = '/dbfs/FileStore/datascience/oa_provider'
+S3_BUCKET = 'dhc-ize'
+S3_KEY = 'oppurtunity-assesment/clientdata'
+
+# COMMAND ----------
+
+# link to physician page
+
+PHYS_LINK = "https://www.defhc.com/physicians/"
 
 # COMMAND ----------
 
