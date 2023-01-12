@@ -5,6 +5,14 @@
 
 # COMMAND ----------
 
+# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/aws_funcs
+
+# COMMAND ----------
+
+# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/fs_funcs
+
+# COMMAND ----------
+
 import pandas as pd
 
 import pyspark.sql.functions as F
@@ -142,3 +150,35 @@ def insert_into_output(defhc_id, radius, start_date, end_date, sdf, table):
        from {table}
        where {condition}   
        """).display()
+
+# COMMAND ----------
+
+def csv_upload_s3(table, bucket, key_prefix, **cred_kwargs):
+    """
+    Function csv_upload_s3 to upload given hive table as csv to s3
+    params:
+        table str: name of hive table, format of db.tablename
+        bucket str: name of bucket to upload to
+        key_prefix str: key within bucket to upload to
+        **cred_kwargs: aws credentials, with aws_access_key_id/aws_secret_access_key, optional aws_session_token
+        
+    returns:
+        none, uploads file as csv    
+    
+    """
+    
+    # create client to connect using creds
+    
+    client = boto3_s3_client(**cred_kwargs)
+        
+    # get name of table (without database name), read in from hive and then convert to csv
+    
+    name = table.split('.')[-1]
+    out_file = f"/tmp/{name}.csv"
+
+    df = hive_to_df(table, df_type='pandas')
+    df.to_csv(out_file, index=False)
+    
+    # upload to s3
+
+    upload_s3(client, bucket, key_prefix, out_file)      

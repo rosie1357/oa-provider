@@ -17,6 +17,10 @@
 
 # COMMAND ----------
 
+# MAGIC %run ./credentials
+
+# COMMAND ----------
+
 # MAGIC %run ./geo_funcs
 
 # COMMAND ----------
