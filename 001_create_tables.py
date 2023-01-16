@@ -500,7 +500,8 @@ hive_sample(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
 # create temp view of stacked referrals (explit and explicit), create network flags for both rendering AND referring providers
 
 referrals = spark.sql(f"""
-        select *
+        select a.*
+               ,pos.pos_cat as rend_pos_cat
                ,{network_flag('rend_network_id', INPUT_NETWORK, suffix='_spec')}
                ,{network_flag('ref_network_id', INPUT_NETWORK, suffix='_pcp')}
                      
@@ -532,6 +533,9 @@ referrals = spark.sql(f"""
         
         ) a
         
+    left   join {DATABASE}.pos_category_assign pos
+    on     a.rend_pos = pos.PlaceOfServiceCd
+        
     """)
 
 referrals.createOrReplaceTempView('referrals_vw')
@@ -547,6 +551,7 @@ df_referrals = spark.sql(f"""
     select patient_id
         , rend_fac_npi
         , rend_pos
+        , rend_pos_cat
         
         , ref_npi as npi_pcp
         , ref_network_id as network_id_pcp
