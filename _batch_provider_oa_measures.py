@@ -45,6 +45,10 @@ if RUN_SETUP == 1:
 
 # COMMAND ----------
 
+RUN_ARGUMENTS
+
+# COMMAND ----------
+
 # run notebook for main table creation
 
 returns = ast.literal_eval(dbutils.notebook.run('001_create_tables', 0, arguments = RUN_ARGUMENTS))
@@ -58,4 +62,18 @@ notebook_returns_passthrough(returns_dict = returns,
 # run notebook for page 1 (dashboard) measure creation
 # TODO: add specific returns
 
-dbutils.notebook.run('005_dashboard', 0, arguments = RUN_ARGUMENTS)
+dbutils.notebook.run('002_dashboard', 0, arguments = RUN_ARGUMENTS)
+
+# COMMAND ----------
+
+# run notebook for page 3 (specialists) measure creation
+# TODO: add specific returns
+
+dbutils.notebook.run('004_specialists', 0, arguments = RUN_ARGUMENTS)
+
+# COMMAND ----------
+
+# run notebook for page 4 (PCPs) measure creation
+# TODO: add specific returns
+
+dbutils.notebook.run('006_pcps', 0, arguments = RUN_ARGUMENTS)
