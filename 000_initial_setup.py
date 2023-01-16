@@ -264,3 +264,58 @@ pyspark_to_hive(schema, f"{DATABASE}.page3_top_pcp_flow")
 
 exit_notebook(f"Initial setup run to create lookup tables: {', '.join(LOOKUP_TABLES)}",
               fail=False)
+
+# COMMAND ----------
+
+# MAGIC %md #### 3D. PCPs (Page 4)
+
+# COMMAND ----------
+
+# page4_loyalty_map_pcps
+
+schema = create_empty_output({'specialty_cat_spec': StringType(),
+                              'zipcd': StringType(),
+                              'count_in_network': IntegerType(),
+                              'count_out_of_network': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page4_loyalty_map_pcps")
+
+# COMMAND ----------
+
+# page4_pcp_dist 
+
+schema = create_empty_output({'specialty_cat_spec': StringType(),
+                              'affiliated_flag_pcp': StringType(),
+                              'loyalty_flag_pcp': StringType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page4_pcp_dist")
+
+# COMMAND ----------
+
+# page4_patient_flow_pcps
+
+schema = create_empty_output({'npi_pcp': StringType(),
+                              'name_pcp': StringType(),
+                              'specialty_cat_spec': StringType(),
+                              'npi_spec': IntegerType(),
+                              'name_spec': StringType(),
+                              'network_flag_spec': IntegerType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page4_patient_flow_pcps")
+
+# COMMAND ----------
+
+# page4_net_leakage
+
+schema = create_empty_output({'specialty_cat_spec': StringType(),
+                              'net_defhc_id_spec': IntegerType(),
+                              'net_defhc_name_spec': StringType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page4_net_leakage")
