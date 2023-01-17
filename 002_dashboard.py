@@ -193,13 +193,24 @@ cnt_pcp = pcp_spec_summary.filter(F.col('specialty_type')=='PCP').withColumnRena
 
 # MAGIC %md
 # MAGIC 
-# MAGIC #### 1B. Combine and Output All Counts
+# MAGIC #### 1B. Add DefHC Name
+
+# COMMAND ----------
+
+defhc_name = spark.sql(f"select defhc_name from {TMP_DATABASE}.input_org_info")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 1C. Combine and Output All Counts
 
 # COMMAND ----------
 
 # combine individual counts
 
-all_counts = cnt_patient.join(cnt_inpat_hosp) \
+all_counts = defhc_name.join(cnt_patient) \
+                        .join(cnt_inpat_hosp) \
                         .join(cnt_pg) \
                         .join(cnt_asc) \
                         .join(cnt_pcp) \
