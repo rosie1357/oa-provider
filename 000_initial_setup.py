@@ -130,7 +130,8 @@ pyspark_to_hive(spark.createDataFrame(pos_lookups),
 
 # page1_toplevel_counts
 
-schema = create_empty_output({'cnt_patients': IntegerType(),
+schema = create_empty_output({'defhc_name': StringType(),
+                              'cnt_patients': IntegerType(),
                               'cnt_ip_hospitals':  IntegerType(),
                               'cnt_pgs': IntegerType(),
                               'cnt_ascs': IntegerType(),
