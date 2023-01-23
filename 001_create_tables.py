@@ -318,12 +318,13 @@ hive_sample(f"{TMP_DATABASE}.nearby_hcos_id")
 
 df_nearby_hcps_spec = spark.sql(f"""
     select np.*
-        ,  pv.ProviderName
-        ,  pa.defhc_id_primary
-        ,  pa.defhc_name_primary
+        , pv.ProviderName
+        , pa.defhc_id_primary
+        , pa.defhc_name_primary
         , {affiliated_flag('defhc_id_primary', DEFHC_ID)}
         
-        ,  pv.PrimarySpecialty
+        , pv.PrimarySpecialty
+        , pv.zipcd
         
         , sp.specialty_cat
         , sp.specialty_type
@@ -563,6 +564,7 @@ df_referrals = spark.sql(f"""
         , ref.ProviderName as name_pcp
         , ref.affiliated_flag as affiliated_flag_pcp
         , ref.defhc_name_primary as affiliation_pcp
+        , ref.zipcd as zipcd_pcp
         , ref.npi_url as npi_url_pcp
         
         , rend_npi as npi_spec
@@ -575,6 +577,7 @@ df_referrals = spark.sql(f"""
         , rend.ProviderName as name_spec
         , rend.affiliated_flag as affiliated_flag_spec
         , rend.defhc_name_primary as affiliation_spec
+        , rend.zipcd as zipcd_spec
         , rend.npi_url as npi_url_spec
         
     from   referrals_vw a
