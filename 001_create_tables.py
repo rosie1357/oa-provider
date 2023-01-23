@@ -499,12 +499,17 @@ hive_sample(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
 # COMMAND ----------
 
 # create temp view of stacked referrals (explit and explicit), create network flags for both rendering AND referring providers
+# join to MartDim.D_Profile to get network IDs and names
 
 referrals = spark.sql(f"""
         select a.*
                ,pos.pos_cat as rend_pos_cat
-               ,{network_flag('rend_network_id', INPUT_NETWORK, suffix='_spec')}
+               
                ,{network_flag('ref_network_id', INPUT_NETWORK, suffix='_pcp')}
+               ,{network_flag('rend_network_id', INPUT_NETWORK, suffix='_spec')}
+               
+               ,ref.ProfileName as net_defhc_name_pcp
+               ,rend.ProfileName as net_defhc_name_spec
                      
        from (
         
@@ -536,6 +541,12 @@ referrals = spark.sql(f"""
         
     left   join {DATABASE}.pos_category_assign pos
     on     a.rend_pos = pos.PlaceOfServiceCd
+    
+    left join MartDim.D_Profile ref
+    on     a.ref_network_id = ref.DefinitiveId
+    
+    left join MartDim.D_Profile rend
+    on     a.rend_network_id = rend.DefinitiveId
         
     """)
 
@@ -555,7 +566,8 @@ df_referrals = spark.sql(f"""
         , rend_pos_cat
         
         , ref_npi as npi_pcp
-        , ref_network_id as network_id_pcp
+        , ref_network_id as net_defhc_id_pcp
+        , net_defhc_name_pcp
         , network_flag_pcp
         
         , ref.PrimarySpecialty as PrimarySpecialty_pcp
@@ -568,7 +580,8 @@ df_referrals = spark.sql(f"""
         , ref.npi_url as npi_url_pcp
         
         , rend_npi as npi_spec
-        , rend_network_id as network_id_spec
+        , rend_network_id as net_defhc_id_spec
+        , net_defhc_name_spec
         , network_flag_spec
         
         , rend.PrimarySpecialty as PrimarySpecialty_spec
