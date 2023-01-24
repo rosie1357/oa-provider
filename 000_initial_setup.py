@@ -263,11 +263,6 @@ pyspark_to_hive(schema, f"{DATABASE}.page3_top_pcp_flow")
 
 # COMMAND ----------
 
-exit_notebook(f"Initial setup run to create lookup tables: {', '.join(LOOKUP_TABLES)}",
-              fail=False)
-
-# COMMAND ----------
-
 # MAGIC %md #### 3D. PCPs (Page 4)
 
 # COMMAND ----------
@@ -320,3 +315,8 @@ schema = create_empty_output({'specialty_cat_spec': StringType(),
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.page4_net_leakage")
+
+# COMMAND ----------
+
+exit_notebook(f"Initial setup run to create lookup tables: {', '.join(LOOKUP_TABLES)}",
+              fail=False)
