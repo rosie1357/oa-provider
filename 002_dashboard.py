@@ -54,7 +54,7 @@ DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(
 
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
-INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network'])
+INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network', 'defhc_name'])
 
 # COMMAND ----------
 
@@ -193,28 +193,18 @@ cnt_pcp = pcp_spec_summary.filter(F.col('specialty_type')=='PCP').withColumnRena
 
 # MAGIC %md
 # MAGIC 
-# MAGIC #### 1B. Add DefHC Name
-
-# COMMAND ----------
-
-defhc_name = spark.sql(f"select defhc_name from {TMP_DATABASE}.input_org_info")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC #### 1C. Combine and Output All Counts
+# MAGIC #### 1B. Combine All Counts, add Name and Output
 
 # COMMAND ----------
 
 # combine individual counts
 
-all_counts = defhc_name.join(cnt_patient) \
-                        .join(cnt_inpat_hosp) \
+all_counts = cnt_patient.join(cnt_inpat_hosp) \
                         .join(cnt_pg) \
                         .join(cnt_asc) \
                         .join(cnt_pcp) \
-                        .join(cnt_spec)
+                        .join(cnt_spec) \
+                        .withColumn('defhc_name', F.lit(DEFHC_NAME))
 
 # COMMAND ----------
 

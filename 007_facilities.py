@@ -74,17 +74,17 @@ facilities_sdf = spark.sql(f"""
                         ,facility_type
                         ,latitude
                         ,longitude
-                        ,network_flag
                         
-        from {TMP_DATABASE}.nearby_hcos_npi
-        where facility_type is not null
+        from {TMP_DATABASE}.nearby_hcos_id
+        where facility_type is not null and 
+              primary=1
     """)
 
-sdf_frequency(facilities_sdf, ['FirmType'])
+sdf_frequency(facilities_sdf, ['facility_type'])
 
 # COMMAND ----------
 
-facilities_sdf.filter(F.col('facility_type')=='Physician Group').sort('defhc_id', 'latitude').display()
+
 
 # COMMAND ----------
 
