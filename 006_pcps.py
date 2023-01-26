@@ -25,7 +25,6 @@
 # MAGIC   - {DATABASE}.page4_net_leakage
 # MAGIC 
 # MAGIC *Outstanding questions:*
-# MAGIC 1. *should this page be limited to ASC/HOPD/Hospital Inpatient?*
 # MAGIC 2. *confirm PCP Distribution should be count of providers*
 
 # COMMAND ----------
@@ -80,8 +79,7 @@ page4_loyalty_map_sdf = spark.sql(f"""
         ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) as count_in_network
         ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
         
-    from   {TMP_DATABASE}.{PCP_REFS_TBL} 
-    where rend_pos_cat in ('ASC & HOPD', 'Hospital Inpatient') 
+    from   {TMP_DATABASE}.{PCP_REFS_TBL}
     group  by specialty_cat_spec
         ,  zipcd 
            
@@ -117,7 +115,6 @@ page4_pcp_dist_sdf = spark.sql(f"""
         ,  count(*) as count_total
            
     from   {TMP_DATABASE}.{PCP_REFS_TBL}
-    where  rend_pos_cat in ('ASC & HOPD', 'Hospital Inpatient') 
          
    group   by npi_pcp
        ,   specialty_cat_spec
@@ -160,9 +157,6 @@ page4_patient_flow_pcps_sdf = spark.sql(f"""
         ,  count(*) as count
            
     from   {TMP_DATABASE}.{PCP_REFS_TBL}
-    where  specialty_type_pcp = 'PCP' 
-    and    specialty_type_spec = 'Specialist'
-    and    rend_pos_cat in ('ASC & HOPD', 'Hospital Inpatient') 
     group by npi_pcp
         ,  name_pcp
         ,  specialty_cat_spec
@@ -203,8 +197,7 @@ page4_net_leakage_sdf = spark.sql(f"""
     from   {TMP_DATABASE}.{PCP_REFS_TBL} 
     where  network_id_pcp = {INPUT_NETWORK}
     and    network_id_spec != {INPUT_NETWORK}
-    and    network_id_spec is not null 
-    and    rend_pos_cat in ('ASC & HOPD', 'Hospital Inpatient') 
+    and    network_id_spec is not null
     group  by net_defhc_id_spec
            ,  net_defhc_name_spec
            ,  ProfileName

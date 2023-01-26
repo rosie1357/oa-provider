@@ -16,18 +16,11 @@
 # MAGIC 
 # MAGIC **Inputs**:
 # MAGIC   - {TMP_DATABASE}.input_org_info
-# MAGIC   - {TMP_DATABASE}.nearby_hcps
+# MAGIC   - {TMP_DATABASE}.nearby_hcos_id
 # MAGIC   - {TMP_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
-# MAGIC   - MartDim.D_Organization
-# MAGIC   - MxMart.F_MxClaim_v2
 # MAGIC   
 # MAGIC **Outputs** (inserted into):
-# MAGIC 
-# MAGIC 
-# MAGIC *Outstanding questions:*
-# MAGIC 1. *should this page be limited to ASC/HOPD/Hospital Inpatient?*
-# MAGIC 2. *confirm PCP Distribution should be count of providers*
 
 # COMMAND ----------
 
@@ -69,184 +62,80 @@ upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, 
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ### 1. PCP Loyalty by Zip Code Map
+# MAGIC ### 1. Map of Facilities
 
 # COMMAND ----------
 
-# subset claims to specialists only, aggregate claim counts for output table
+# subset nearby NPIs to non-null facility type and keep address info, look at count of facilities kept
 
-page4_loyalty_map_sdf = spark.sql(f"""
-    select specialty_cat_spec
-        ,  zipcd  
-        ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) as count_in_network
-        --,  count(distinct case when network_flag_spec = 'In-Network' then patient_id end) as pats_in_network
-        ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
-        --,  count(distinct case when network_flag_spec = 'Out-of-Network' then Patient_Id end) as pats_out_of_network
-    from   {TMP_DATABASE}.{PCP_REFS_TBL} a 
-    join   MartDim.D_Provider b 
-    on     a.npi_pcp = b.npi 
-    where  specialty_type_pcp = 'PCP' 
-    and    specialty_type_spec = 'Specialist'
-    and    rend_pos_cat in ('ASC & HOPD', 'Hospital Inpatient') 
-    group  by specialty_cat_spec
-        ,  zipcd 
-           
-""")
+facilities_sdf = spark.sql(f"""
+        select distinct defhc_id
+                        ,defhc_name
+                        ,facility_type
+                        ,latitude
+                        ,longitude
+                        ,network_flag
+                        
+        from {TMP_DATABASE}.nearby_hcos_npi
+        where facility_type is not null
+    """)
+
+sdf_frequency(facilities_sdf, ['FirmType'])
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table, and load to s3
-
-TBL_NAME = f"{DATABASE}.page4_loyalty_map_pcps"
-
-page4_loyalty_map = create_final_output_func(page4_loyalty_map_sdf)
-
-insert_into_output_func(page4_loyalty_map.sort('specialty_cat_spec', 'zipcd'), TBL_NAME)
-
-# upload_to_s3_func(TBL_NAME)
-
-# page4_loyalty_map.sort('specialty_cat_spec', 'zipcd').display()
+facilities_sdf.filter(F.col('facility_type')=='Physician Group').sort('defhc_id', 'latitude').display()
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ### 2. PCP Distribution
+# MAGIC ### 2. Market Share
 
 # COMMAND ----------
 
-page4_pcp_dist_sdf = spark.sql(f"""
-    with t1 as 
-    (
-    select npi_pcp
-        ,  specialty_cat_spec
-        ,  affiliated_flag_pcp
-        ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) / count(*) as pct_in_network
-           
-    from   {TMP_DATABASE}.{PCP_REFS_TBL}
-    where  specialty_type_pcp = 'PCP' 
-    and    specialty_type_spec = 'Specialist'
-    and    rend_pos_cat in ('ASC & HOPD', 'Hospital Inpatient') 
-         
-   group   by npi_pcp
-       ,   specialty_cat_spec
-       ,   affiliated_flag_pcp
-   ) 
-   select specialty_cat_spec
-       ,  affiliated_flag_pcp
-       ,  case when pct_in_network > 0.7 then 'Loyal'
-               when pct_in_network > 0.3 then 'Splitter'
-               else 'Dissenter' end as loyalty_flag_pcp
-       ,  count(*) as count
-   from   t1 
-   group  by specialty_cat_spec
-       ,  affiliated_flag_pcp
-       ,  case when pct_in_network > 0.7 then 'Loyal'
-               when pct_in_network > 0.3 then 'Splitter'
-               else 'Dissenter' end
-         
-""")
+# to calculate market share (count of claims) by network for given facility type,
+# call get_top_values() to count claims by facility type and identify top networks
+
+market_pie = get_top_values(defhc = 'net_defhc',
+                            defhc_value = INPUT_NETWORK,
+                            max_row = 4,
+                            strat_col='facility_type',
+                            subset="where facility_type is not null"
+                           )
+
+market_pie.createOrReplaceTempView('market_pie_vw')
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# collapse all the networks in the "other" category
+# if there are 0 counts in the other group (<5 total networks for the given POS) delete the record(s)
 
-TBL_NAME = f"{DATABASE}.page4_pcp_dist"
+market_pie = spark.sql(f"""
 
-page4_pcp_dist = create_final_output_func(page4_pcp_dist_sdf)
-
-insert_into_output_func(page4_pcp_dist.sort('specialty_cat_spec', 'affiliated_flag_pcp'), TBL_NAME)
-
-# upload_to_s3_func(TBL_NAME)
-
-# page4_pcp_dist.sort('specialty_cat_spec', 'affiliated_flag_pcp', 'loyalty_flag').display()
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC ### 3. Top 10 PCPs; Patient Flow
-
-# COMMAND ----------
-
-# read in referrals and aggregate 
-
-page4_patient_flow_pcps_sdf = spark.sql(f"""
+    select  facility_type
+          , network_label
+          , network_name
+          , sum(cnt_claims) as count
+          
+    from market_pie_vw
     
-    select npi_pcp
-        ,  name_pcp
-        ,  specialty_cat_spec
-        ,  npi_spec
-        ,  name_spec
-        ,  network_flag_spec
-        ,  count(*) as count
-           
-    from   {TMP_DATABASE}.{PCP_REFS_TBL}
-    where  specialty_type_pcp = 'PCP' 
-    and    specialty_type_spec = 'Specialist'
-    and    rend_pos_cat in ('ASC & HOPD', 'Hospital Inpatient') 
-    group by npi_pcp
-        ,  name_pcp
-        ,  specialty_cat_spec
-        ,  npi_spec
-        ,  name_spec
-        ,  network_flag_spec
-
-""")
+    group by facility_type
+            , network_label
+            , network_name
+          
+     having (count > 0) or (network_name != 'Other')     
+     
+    """)
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
+# call create final output to join to base cols and add timestamp, insert output for insert into table, and load to s3
 
-TBL_NAME = f"{DATABASE}.page4_patient_flow_pcps"
+TBL_NAME = f"{DATABASE}.page5_market_share"
 
-page4_patient_flow_pcps = create_final_output_func(page4_patient_flow_pcps_sdf)
+page5_market_share = create_final_output_func(market_pie)
 
-insert_into_output_func(page4_patient_flow_pcps.sort('npi_pcp', 'specialty_cat_spec'), TBL_NAME)
+insert_into_output_func(page5_market_share.sort('facility_type', 'network_label'), TBL_NAME)
 
-# upload_to_s3_func(TBL_NAME)
-
-# page4_patient_flow_pcps.sort('npi_pcp', 'specialty_cat_spec').display()
-
-# COMMAND ----------
-
-# MAGIC %md ### 4. Top 10 Leakage Networks
-
-# COMMAND ----------
-
-# read in referrals and aggregate 
-
-page4_net_leakage_sdf = spark.sql(f"""
-    
-    select specialty_cat_spec
-        ,  network_id_spec as net_defhc_id_spec
-        ,  ProfileName as net_defhc_name_spec
-        ,  count(*) as count
-    from   {TMP_DATABASE}.{PCP_REFS_TBL} a 
-    join   MartDim.D_Profile b 
-    on     a.network_id_spec = b.DefinitiveId
-    where  network_id_pcp = {INPUT_NETWORK}
-    and    network_id_spec != {INPUT_NETWORK}
-    and    network_id_spec is not null 
-    and    specialty_type_pcp = 'PCP' 
-    and    specialty_type_spec = 'Specialist'
-    and    rend_pos_cat in ('ASC & HOPD', 'Hospital Inpatient') 
-    group  by specialty_cat_spec
-        ,  network_id_spec
-        ,  ProfileName
-
-""")
-
-# COMMAND ----------
-
-# call create final output to join to base cols and add timestamp, and insert output for insert into table
-
-TBL_NAME = f"{DATABASE}.page4_net_leakage"
-
-page4_net_leakage = create_final_output_func(page4_net_leakage_sdf)
-
-insert_into_output_func(page4_net_leakage.sort('specialty_cat_spec'), TBL_NAME)
-
-# upload_to_s3_func(TBL_NAME)
-
-# page4_net_leakage.sort('specialty_cat_spec').display()
+upload_to_s3_func(TBL_NAME)

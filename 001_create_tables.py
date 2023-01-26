@@ -22,9 +22,11 @@
 # MAGIC   - npi_hco_mapping.dhc_pg_location_addresses
 # MAGIC   - definitivehc.hospital_physician_compare_physicians
 # MAGIC   - npi_hco_mapping.npi_registry_addresses
+# MAGIC   - hcp_affiliations.physician_org_affiliations
 # MAGIC   - MxMart.F_MxClaim_v2
 # MAGIC   - MartDim.D_Organization
 # MAGIC   - MartDim.D_Profile
+# MAGIC   - MartDim.D_Provider
 # MAGIC   - ds_payer_mastering.mx_claims_imputed_payers
 # MAGIC   - ds_payer_mastering.encoded_payer_id_mapping
 # MAGIC   - {DATABASE}.explicit_referrals
@@ -41,6 +43,10 @@
 # COMMAND ----------
 
 # MAGIC %run ./_funcs_include/all_provider_funcs
+
+# COMMAND ----------
+
+from pyspark.sql.types import IntegerType
 
 # COMMAND ----------
 
@@ -167,6 +173,7 @@ df_hco_profile_coords = spark.sql(f"""
                                     ,  hq_longitude as longitude
                                     ,  hq_latitude as latitude
                                     ,  hq_zip_code as zip
+                                    ,  1 as primary
                                 from   definitivehc.hospital_all_companies 
                                 
                                 union  distinct 
@@ -175,6 +182,7 @@ df_hco_profile_coords = spark.sql(f"""
                                     ,  hq_longitude
                                     ,  hq_latitude 
                                     ,  facility_zip
+                                    ,  0 as primary
                                 from   npi_hco_mapping.dhc_pg_location_addresses
                                 """).toPandas()
 
@@ -245,7 +253,10 @@ gdf_input_coord['geometry'] = gdf_input_coord['geometry'].buffer(1609.34*RADIUS)
 
 df_nearby_hcos_id = get_intersection(base_gdf = gdf_input_coord,
                                  match_gdf = gdf_hco_coords,
-                                 id_col = 'defhc_id')
+                                 id_col = 'defhc_id',
+                                 keep_coords='right',
+                                 keep_cols=['primary'],
+                                 keep_types=[IntegerType()])
 
 df_nearby_hcps = get_intersection(base_gdf = gdf_input_coord,
                                  match_gdf = gdf_hcp_coords,
@@ -253,7 +264,8 @@ df_nearby_hcps = get_intersection(base_gdf = gdf_input_coord,
 
 df_nearby_hcos_npi = get_intersection(base_gdf = gdf_input_coord,
                                       match_gdf = gdf_hco_npi_coords,
-                                      id_col = 'NPI')
+                                      id_col = 'NPI',
+                                      keep_coords='right')
 
 # COMMAND ----------
 
@@ -281,11 +293,15 @@ df_nearby_hcos_npi.createOrReplaceTempView('df_nearby_hcos_npi_vw')
 
 # join nearby_hcos to d_profile to get firm and facility type, and save to temp directory
 
+
 df_nearby_hcos_id = spark.sql(f"""
     select no.*
+        ,  pf.ProfileName as defhc_name
         ,  pf.FirmTypeName
         ,  pf.FacilityTypeName
         
+        , {assign_fac_types(alias='pf')}
+                    
     from  df_nearby_hcos_id_vw no
     
     left join   martdim.d_profile pf 
@@ -363,12 +379,15 @@ hive_sample(f"{TMP_DATABASE}.nearby_hcps")
 #    D_Organization to get defhc_id
 #    D_Profile to get network IDs
 
-df_nearby_hcos_npi = spark.sql(f"""
+df_nearby_hcos_npi2 = spark.sql(f"""
     select hn.*
             ,  p.DefinitiveId as defhc_id 
             ,  p.NetworkDefinitiveId as net_defhc_id
             ,  p.ProfileName as defhc_name
             ,  netp.ProfileName as net_defhc_name
+            
+            , p.FirmTypeName
+            , {assign_fac_types(alias='p')}
             
             , {network_flag('p.NetworkDefinitiveId', INPUT_NETWORK)}
 
@@ -386,7 +405,7 @@ df_nearby_hcos_npi = spark.sql(f"""
            on     p.NetworkDefinitiveId = netp.DefinitiveId
 """)
 
-pyspark_to_hive(df_nearby_hcos_npi,
+pyspark_to_hive(df_nearby_hcos_npi2,
                f"{TMP_DATABASE}.nearby_hcos_npi")
 
 # COMMAND ----------
@@ -427,9 +446,7 @@ df_mxclaims_master = spark.sql(f"""
         ,  np.defhc_name
         ,  np.net_defhc_name
         ,  np.network_flag
-        
-        ,  pm.defhc_id as payer_id 
-        ,  pm.defhc_name as payer_name
+        ,  np.facility_type
         
         , prov.PrimarySpecialty
         , prov.ProviderName
@@ -448,15 +465,6 @@ df_mxclaims_master = spark.sql(f"""
            inner join
            {TMP_DATABASE}.nearby_hcos_npi np
            on np.NPI = ifnull(mc.FacilityNPI, mc.BillingProviderNPI)
-    
-           
-           left   join ds_payer_mastering.mx_claims_imputed_payers pay 
-           on     mc.DHCClaimId = pay.DHCClaimId and
-                  mc.MxClaimYear = pay.MxClaimYear and
-                  mc.MxClaimMonth = pay.MxClaimMonth
-                  
-           left   join ds_payer_mastering.encoded_payer_id_mapping pm 
-           on     pay.dh_encoded_id = pm.dh_encoded_id 
            
            left join  MartDim.D_Provider prov
            on         mc.RenderingProviderNPI = prov.NPI
@@ -481,7 +489,7 @@ df_mxclaims_master = spark.sql(f"""
 # save to temp database
 
 pyspark_to_hive(df_mxclaims_master,
-               f"{TMP_DATABASE}.{MX_CLMS_TBL}")
+               f"{TMP_DATABASE}.{MX_CLMS_TBL}", overwrite_schema='true')
 
 # COMMAND ----------
 
@@ -652,9 +660,12 @@ sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['specialty_type', 'Pri
 
 # COMMAND ----------
 
-# HCO NPIs: creation of network_flag
+# HCO NPIs: creation of network_flag, facility type from firm type
 
 sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"), ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', with_pct=True, maxobs=100)
+
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"), ['FirmTypeName', 'facility_type'], order='cols')
+
 
 # COMMAND ----------
 
