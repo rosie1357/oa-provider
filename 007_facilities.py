@@ -28,6 +28,8 @@
 
 # COMMAND ----------
 
+import pandas as pd
+
 from functools import partial
 
 # COMMAND ----------
@@ -274,5 +276,49 @@ TBL_NAME = f"{DATABASE}.page5_top10_pcp"
 page5_top10_pcp = create_final_output_func(pcp_top10_sdf)
 
 insert_into_output_func(page5_top10_pcp.sort('facility_type','facility_id', 'rank'), TBL_NAME)
+
+upload_to_s3_func(TBL_NAME)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC ### 5. Top 10 Facilities Post-Discharge
+
+# COMMAND ----------
+
+# until we decide how to calculate inpatient stays, will just create dummy records for this,
+# with 10 facilities and counts for each Hospital in facilities_sdf
+
+numbers = list(range(1, 11))
+
+fac_samp_dict = {
+    'discharge_facility_id': numbers,
+    'discharge_facility_name': [f"Dummy Facility {x}" for x in numbers],
+    'count': [x*10 for x in numbers[::-1]],
+    'rank': numbers
+}
+
+dummy_sdf = spark.createDataFrame(pd.DataFrame(fac_samp_dict))
+
+dummy_sdf.display()
+
+# COMMAND ----------
+
+top10_postdis_sdf = facilities_sdf.filter(F.col('facility_type')=='Hospital') \
+                                  .select('facility_id') \
+                                  .join(dummy_sdf)
+
+top10_postdis_sdf.sort('facility_id','rank').display()
+
+# COMMAND ----------
+
+# call create final output to join to base cols and add timestamp, filter to top 10, insert output for insert into table, and load to s3
+
+TBL_NAME = f"{DATABASE}.page5_top10_postdis"
+
+top10_postdis = create_final_output_func(top10_postdis_sdf)
+
+insert_into_output_func(top10_postdis.sort('facility_id', 'rank'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)

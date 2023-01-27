@@ -81,7 +81,7 @@ page4_loyalty_map_sdf = spark.sql(f"""
         
     from   {TMP_DATABASE}.{PCP_REFS_TBL}
     group  by specialty_cat_spec
-        ,  zipcd 
+        ,  zip_pcp 
            
 """)
 
@@ -93,7 +93,7 @@ TBL_NAME = f"{DATABASE}.page4_loyalty_map_pcps"
 
 page4_loyalty_map = create_final_output_func(page4_loyalty_map_sdf)
 
-insert_into_output_func(page4_loyalty_map.sort('specialty_cat_spec', 'zip_pcp'), TBL_NAME)
+insert_into_output_func(page4_loyalty_map.sort('specialty_cat_spec', 'zipcd'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -157,9 +157,11 @@ page4_patient_flow_pcps_sdf = spark.sql(f"""
     from   {TMP_DATABASE}.{PCP_REFS_TBL}
     group by npi_pcp
         ,  name_pcp
+        ,  npi_url_pcp
         ,  specialty_cat_spec
         ,  npi_spec
         ,  name_spec
+        ,  npi_url_spec
         ,  network_flag_spec
 
 """)
@@ -190,13 +192,15 @@ page4_net_leakage_sdf = spark.sql(f"""
         ,  net_defhc_id_spec
         ,  net_defhc_name_spec
         ,  count(*) as count
+        
     from   {TMP_DATABASE}.{PCP_REFS_TBL} 
-    where  network_id_pcp = {INPUT_NETWORK}
-    and    network_id_spec != {INPUT_NETWORK}
-    and    network_id_spec is not null
-    group  by net_defhc_id_spec
-           ,  net_defhc_name_spec
-           ,  ProfileName
+    where  net_defhc_id_pcp = {INPUT_NETWORK}
+    and    net_defhc_id_spec != {INPUT_NETWORK}
+    and    net_defhc_id_spec is not null
+    
+    group  by specialty_cat_spec
+        ,  net_defhc_id_spec
+        ,  net_defhc_name_spec
 
 """)
 

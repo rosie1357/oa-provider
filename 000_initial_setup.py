@@ -298,10 +298,10 @@ schema = create_empty_output({'npi_pcp': StringType(),
                               'name_pcp': StringType(),
                               'npi_url_pcp': StringType(),
                               'specialty_cat_spec': StringType(),
-                              'npi_spec': IntegerType(),
+                              'npi_spec': StringType(),
                               'name_spec': StringType(),
                               'npi_url_spec': StringType(),
-                              'network_flag_spec': IntegerType(),
+                              'network_flag_spec': StringType(),
                               'count': IntegerType()
                              })
 
@@ -378,6 +378,18 @@ schema = create_empty_output({'facility_type': StringType(),
 
 pyspark_to_hive(schema, f"{DATABASE}.page5_top10_pcp")
 
+# COMMAND ----------
+
+# page5_top10_postdis
+
+schema = create_empty_output({'facility_id':  StringType(),
+                              'discharge_facility_id':  StringType(),
+                              'discharge_facility_name': StringType(),
+                              'count': IntegerType(),
+                              'rank': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_top10_postdis")
 
 # COMMAND ----------
 
