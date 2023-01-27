@@ -75,7 +75,7 @@ upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, 
 
 page4_loyalty_map_sdf = spark.sql(f"""
     select specialty_cat_spec
-        ,  zip_pcp
+        ,  zip_pcp as zipcd
         ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) as count_in_network
         ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
         
@@ -97,8 +97,6 @@ insert_into_output_func(page4_loyalty_map.sort('specialty_cat_spec', 'zip_pcp'),
 
 upload_to_s3_func(TBL_NAME)
 
-page4_loyalty_map.sort('specialty_cat_spec', 'zipcd').display()
-
 # COMMAND ----------
 
 # MAGIC %md
@@ -112,7 +110,7 @@ page4_pcp_dist_sdf = spark.sql(f"""
         ,  specialty_cat_spec
         ,  affiliated_flag_pcp
         ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) as count_in_network
-        ,  count(*) as count_total
+        ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
            
     from   {TMP_DATABASE}.{PCP_REFS_TBL}
          
@@ -130,11 +128,9 @@ TBL_NAME = f"{DATABASE}.page4_pcp_dist"
 
 page4_pcp_dist = create_final_output_func(page4_pcp_dist_sdf)
 
-insert_into_output_func(page4_pcp_dist.sort('specialty_cat_spec', 'affiliated_flag_pcp'), TBL_NAME)
+insert_into_output_func(page4_pcp_dist.sort('npi_pcp', 'specialty_cat_spec'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
-
-page4_pcp_dist.sort('specialty_cat_spec', 'affiliated_flag_pcp').display()
 
 # COMMAND ----------
 
@@ -150,9 +146,11 @@ page4_patient_flow_pcps_sdf = spark.sql(f"""
     
     select npi_pcp
         ,  name_pcp
+        ,  npi_url_pcp
         ,  specialty_cat_spec
         ,  npi_spec
         ,  name_spec
+        ,  npi_url_spec
         ,  network_flag_spec
         ,  count(*) as count
            
@@ -177,8 +175,6 @@ page4_patient_flow_pcps = create_final_output_func(page4_patient_flow_pcps_sdf)
 insert_into_output_func(page4_patient_flow_pcps.sort('npi_pcp', 'specialty_cat_spec'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
-
-page4_patient_flow_pcps.sort('npi_pcp', 'specialty_cat_spec').display()
 
 # COMMAND ----------
 
@@ -215,5 +211,3 @@ page4_net_leakage = create_final_output_func(page4_net_leakage_sdf)
 insert_into_output_func(page4_net_leakage.sort('specialty_cat_spec'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
-
-page4_net_leakage.sort('specialty_cat_spec').display()

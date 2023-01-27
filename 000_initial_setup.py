@@ -281,10 +281,11 @@ pyspark_to_hive(schema, f"{DATABASE}.page4_loyalty_map_pcps")
 
 # page4_pcp_dist 
 
-schema = create_empty_output({'specialty_cat_spec': StringType(),
+schema = create_empty_output({'npi_pcp': StringType(),
+                              'specialty_cat_spec': StringType(),
                               'affiliated_flag_pcp': StringType(),
-                              'loyalty_flag_pcp': StringType(),
-                              'count': IntegerType()
+                              'count_in_network': IntegerType(),
+                              'count_out_of_network': IntegerType()
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.page4_pcp_dist")
@@ -295,9 +296,11 @@ pyspark_to_hive(schema, f"{DATABASE}.page4_pcp_dist")
 
 schema = create_empty_output({'npi_pcp': StringType(),
                               'name_pcp': StringType(),
+                              'npi_url_pcp': StringType(),
                               'specialty_cat_spec': StringType(),
                               'npi_spec': IntegerType(),
                               'name_spec': StringType(),
+                              'npi_url_spec': StringType(),
                               'network_flag_spec': IntegerType(),
                               'count': IntegerType()
                              })
@@ -347,7 +350,7 @@ pyspark_to_hive(schema, f"{DATABASE}.page5_market_share")
 
 # COMMAND ----------
 
-# page5_top10
+# page5_top10_fac
 
 schema = create_empty_output({'facility_type': StringType(),
                               'facility_id':  StringType(),
@@ -357,7 +360,24 @@ schema = create_empty_output({'facility_type': StringType(),
                               'rank': IntegerType()
                              })
 
-pyspark_to_hive(schema, f"{DATABASE}.page5_top10")
+pyspark_to_hive(schema, f"{DATABASE}.page5_top10_fac")
+
+# COMMAND ----------
+
+# page5_top10_pcp
+
+schema = create_empty_output({'facility_type': StringType(),
+                              'npi_pcp': StringType(),
+                              'name_pcp':  StringType(),
+                              'npi_url_pcp': StringType(),
+                              'facility_id': StringType(),
+                              'network_flag': StringType(),
+                              'count': IntegerType(),
+                              'rank': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_top10_pcp")
+
 
 # COMMAND ----------
 

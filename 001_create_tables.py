@@ -151,6 +151,44 @@ prim_aff.filter(F.col('rn')==1).createOrReplaceTempView('prim_aff_vw')
 
 # MAGIC %md
 # MAGIC 
+# MAGIC #### 1C. Create temp view of NPIs with IDs/networks
+
+# COMMAND ----------
+
+# join all active org NPIs to d_profile to get defhc_id and network def_hcid
+
+org_sdf = spark.sql(f"""
+
+    select o.npi
+         , p.DefinitiveId as defhc_id 
+         , p.NetworkDefinitiveId as net_defhc_id
+         , p.ProfileName as defhc_name
+         , netp.ProfileName as net_defhc_name
+
+         , p.FirmTypeName
+         , {assign_fac_types(alias='p')}
+
+         , {network_flag('p.NetworkDefinitiveId', INPUT_NETWORK)}
+
+
+     from  MartDim.D_Organization o 
+                  
+     left   join MartDim.D_Profile p 
+     on     o.DefinitiveId = p.DefinitiveId
+
+     left   join MartDim.D_Profile netp
+     on     p.NetworkDefinitiveId = netp.DefinitiveId
+           
+     where o.ActiveRecordInd is True
+           
+   """)
+
+org_sdf.createOrReplaceTempView('npi_org_vw')
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
 # MAGIC ### 2. Find nearly facilities
 
 # COMMAND ----------
@@ -348,14 +386,14 @@ df_nearby_hcps_spec = spark.sql(f"""
         
     from  nearby_hcps_vw np
 
-    left join martdim.d_provider pv 
-    on          np.NPI = pv.NPI
-    
-    left join   prim_aff_vw pa
-    on          np.NPI = pa.physician_npi
-    
-    left join  {DATABASE}.hcp_specialty_assignment sp
-    on         pv.PrimarySpecialty = sp.specialty_name
+          left join martdim.d_provider pv 
+          on          np.NPI = pv.NPI
+
+          left join   prim_aff_vw pa
+          on          np.NPI = pa.physician_npi
+
+          left join  {DATABASE}.hcp_specialty_assignment sp
+          on         pv.PrimarySpecialty = sp.specialty_name
 """)
 
 pyspark_to_hive(df_nearby_hcps_spec,
@@ -381,28 +419,20 @@ hive_sample(f"{TMP_DATABASE}.nearby_hcps")
 
 df_nearby_hcos_npi2 = spark.sql(f"""
     select hn.*
-            ,  p.DefinitiveId as defhc_id 
-            ,  p.NetworkDefinitiveId as net_defhc_id
-            ,  p.ProfileName as defhc_name
-            ,  netp.ProfileName as net_defhc_name
+            , o.defhc_id 
+            , o.net_defhc_id
+            , o.defhc_name
+            , o.net_defhc_name
             
-            , p.FirmTypeName
-            , {assign_fac_types(alias='p')}
+            , o.FirmTypeName
+            , o.facility_type
             
-            , {network_flag('p.NetworkDefinitiveId', INPUT_NETWORK)}
-
-    
+            , o.network_flag
+            
     from   df_nearby_hcos_npi_vw hn
 
-           left   join MartDim.D_Organization o 
-           on     hn.npi = o.npi and
-                  o.ActiveRecordInd is True 
-                  
-           left   join MartDim.D_Profile p 
-           on     o.DefinitiveId = p.DefinitiveId
-           
-           left   join MartDim.D_Profile netp
-           on     p.NetworkDefinitiveId = netp.DefinitiveId
+           left   join npi_org_vw o 
+           on     hn.npi = o.npi
 """)
 
 pyspark_to_hive(df_nearby_hcos_npi2,
@@ -505,18 +535,11 @@ hive_sample(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
 
 # COMMAND ----------
 
-# create temp view of stacked referrals (explit and explicit), create network flags for both rendering AND referring providers
-# join to MartDim.D_Profile to get network IDs and names
+# create temp view of stacked referrals (explit and explicit), join to POS crosswalk to get pos_cat
 
 referrals = spark.sql(f"""
         select a.*
-               ,pos.pos_cat as rend_pos_cat
-               
-               ,{network_flag('ref_network_id', INPUT_NETWORK, suffix='_pcp')}
-               ,{network_flag('rend_network_id', INPUT_NETWORK, suffix='_spec')}
-               
-               ,ref.ProfileName as net_defhc_name_pcp
-               ,rend.ProfileName as net_defhc_name_spec
+               ,pos.pos_cat as rend_pos_cat               
                      
        from (
         
@@ -524,10 +547,9 @@ referrals = spark.sql(f"""
                ,   rend_NPI 
                ,   rend_claim_date
                ,   patient_id 
-               ,   rend_fac_npi
+               ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_org_npi
+               ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_org_npi
                ,   rend_pos
-               ,   coalesce(rend_fac_network_id, rend_bill_network_id, rendering_primary_network_id) as rend_network_id
-               ,   coalesce(ref_fac_network_id, ref_bill_network_id, referring_primary_network_id) as ref_network_id
             from   {DATABASE}.explicit_referrals 
             where  rend_claim_date between '{START_DATE}' and '{END_DATE}'
 
@@ -537,10 +559,9 @@ referrals = spark.sql(f"""
                ,   rend_NPI 
                ,   rend_claim_date
                ,   patient_id 
-               ,   rend_fac_npi
+               ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_org_npi
+               ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_org_npi
                ,   rend_pos
-               ,   coalesce(rend_fac_network_id, rend_bill_network_id, rendering_primary_network_id) as rend_network_id
-               ,   coalesce(ref_fac_network_id, ref_bill_network_id, referring_primary_network_id) as ref_network_id
             from   {DATABASE}.implicit_referrals_pcp_specialist
             where  rend_claim_date between '{START_DATE}' and '{END_DATE}'
         
@@ -548,12 +569,6 @@ referrals = spark.sql(f"""
         
     left   join {DATABASE}.pos_category_assign pos
     on     a.rend_pos = pos.PlaceOfServiceCd
-    
-    left join MartDim.D_Profile ref
-    on     a.ref_network_id = ref.DefinitiveId
-    
-    left join MartDim.D_Profile rend
-    on     a.rend_network_id = rend.DefinitiveId
         
     """)
 
@@ -564,17 +579,20 @@ referrals.createOrReplaceTempView('referrals_vw')
 # create referrals by joining to nearby hcps TWICE:
 #  want to subset to both rend AND ref providers nearby,
 #  and where referring provider is PCP and rendering provider is specialist
+#  join twice to NPI org view to get defhc/network info for both PCP and specialist
 
 df_referrals = spark.sql(f"""
     select patient_id
-        , rend_fac_npi
         , rend_pos
         , rend_pos_cat
         
         , ref_npi as npi_pcp
-        , ref_network_id as net_defhc_id_pcp
-        , net_defhc_name_pcp
-        , network_flag_pcp
+        , oref.defhc_id as defhc_id_pcp 
+        , oref.net_defhc_id as net_defhc_id_pcp
+        , oref.defhc_name as defhc_name_pcp
+        , oref.net_defhc_name as net_defhc_name_pcp
+        , oref.facility_type as facility_type_pcp
+        , oref.network_flag as network_flag_pcp
         
         , ref.PrimarySpecialty as PrimarySpecialty_pcp
         , ref.specialty_cat as specialty_cat_pcp
@@ -586,9 +604,12 @@ df_referrals = spark.sql(f"""
         , ref.npi_url as npi_url_pcp
         
         , rend_npi as npi_spec
-        , rend_network_id as net_defhc_id_spec
-        , net_defhc_name_spec
-        , network_flag_spec
+        , orend.defhc_id as defhc_id_spec
+        , orend.net_defhc_id as net_defhc_id_spec
+        , orend.defhc_name as defhc_name_spec
+        , orend.net_defhc_name as net_defhc_name_spec
+        , orend.facility_type as facility_type_spec
+        , orend.network_flag as network_flag_spec
         
         , rend.PrimarySpecialty as PrimarySpecialty_spec
         , rend.specialty_cat as specialty_cat_spec
@@ -599,14 +620,24 @@ df_referrals = spark.sql(f"""
         , rend.zip as zip_spec
         , rend.npi_url as npi_url_spec
         
-    from   referrals_vw a
+    from    referrals_vw a
+            
+            /* inner join to nearby HCPs for both pcp AND spec */
+            
+            inner join {TMP_DATABASE}.nearby_hcps ref
+            on a.ref_npi = ref.npi
 
-    inner join {TMP_DATABASE}.nearby_hcps ref
-    on a.ref_npi = ref.npi
-     
-    inner join {TMP_DATABASE}.nearby_hcps rend
-    on a.rend_npi = rend.npi
-    
+            inner join {TMP_DATABASE}.nearby_hcps rend
+            on a.rend_npi = rend.npi
+        
+            /* left join to NPI organization-level info to get defhc_id/name and network info if exists */
+        
+            left   join npi_org_vw oref
+            on     a.ref_org_npi = oref.npi
+
+            left   join npi_org_vw orend
+            on     a.rend_org_npi = orend.npi    
+
     where ref.specialty_type = 'PCP' and 
           rend.specialty_type = 'Specialist'
            

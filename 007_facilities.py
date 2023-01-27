@@ -80,7 +80,7 @@ facilities_sdf = spark.sql(f"""
               primary=1
     """)
 
-sdf_frequency(facilities_sdf, ['facility_type'])
+sdf_frequency(facilities_sdf, ['facility_type'], order='cols')
 
 # COMMAND ----------
 
@@ -146,7 +146,7 @@ page5_market_share = create_final_output_func(market_pie)
 
 insert_into_output_func(page5_market_share.sort('facility_type', 'network_label'), TBL_NAME)
 
-#upload_to_s3_func(TBL_NAME)
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -159,7 +159,7 @@ insert_into_output_func(page5_market_share.sort('facility_type', 'network_label'
 # to calculate top 10 facilities by count of claims for given facility type,
 # read in full claims and order by claim count by facility name
 
-top10_sdf = spark.sql(f"""
+fac_ranked_sdf = spark.sql(f"""
 
         select *
                 , row_number() over (partition by facility_type 
@@ -182,21 +182,21 @@ top10_sdf = spark.sql(f"""
 
         """)
 
-top10_sdf.sort('facility_type','rank').display()
+fac_ranked_sdf.sort('facility_type','rank').display()
 
 # COMMAND ----------
 
 # confirm distinct by defhc_id
 
-sdf_check_distinct(top10_sdf, ['facility_id'])
+sdf_check_distinct(fac_ranked_sdf, ['facility_id'])
 
 # COMMAND ----------
 
 # call create final output to join to base cols and add timestamp, filter to top 10, insert output for insert into table, and load to s3
 
-TBL_NAME = f"{DATABASE}.page5_top10"
+TBL_NAME = f"{DATABASE}.page5_top10_fac"
 
-page5_top10 = create_final_output_func(top10_sdf.filter(F.col('rank')<=10))
+page5_top10 = create_final_output_func(fac_ranked_sdf.filter(F.col('rank')<=10))
 
 insert_into_output_func(page5_top10.sort('facility_type','rank'), TBL_NAME)
 
@@ -204,4 +204,75 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC 
+# MAGIC ### 4. Top 10 PCPs
 
+# COMMAND ----------
+
+# for any given facility selected, will need to get top 10 PCPs referring TO that facility
+# subset the referrals table to non-null spec facility_type (rendering facility), and count
+# referrals by PCP info, facility and facility_type
+# rank PCPs within given facility/facility type
+# inner join to sdf with all nearby IDs (referrals are only filtered to nearby HCPs, not nearby HCOs)
+
+pcp_ranked_sdf = spark.sql(f"""
+
+    select *
+           , row_number() over (partition by facility_type, facility_id
+                                order by count desc)
+                          as rank
+    
+    from (
+
+        select facility_type_spec as facility_type
+               ,npi_pcp
+               ,name_pcp
+               ,npi_url_pcp
+               ,defhc_id_spec as facility_id
+               ,network_flag_spec as network_flag
+               ,count(*) as count
+
+        from {TMP_DATABASE}.{PCP_REFS_TBL}
+        where facility_type_spec is not null
+
+        group by facility_type_spec
+                ,npi_pcp
+                ,name_pcp
+                ,npi_url_pcp
+                ,defhc_id_spec
+                ,network_flag_spec
+        ) a
+
+""")
+
+pcp_ranked_sdf.filter(F.col('rank')<=10).count()
+
+# COMMAND ----------
+
+# filter to IDs in nearby facilities and compare count with ALL facilities
+
+pcp_top10_sdf = pcp_ranked_sdf.filter(F.col('rank')<=10) \
+                              .join(facilities_sdf.select('facility_id'), \
+                                   ['facility_id'], \
+                                   'inner')
+
+pcp_top10_sdf.count()
+
+# COMMAND ----------
+
+# get count of unique facilities by type retained (compare to map counts)
+
+sdf_frequency(pcp_top10_sdf.select('facility_id','facility_type').distinct(), ['facility_type'], order='cols')
+
+# COMMAND ----------
+
+# call create final output to join to base cols and add timestamp, filter to top 10, insert output for insert into table, and load to s3
+
+TBL_NAME = f"{DATABASE}.page5_top10_pcp"
+
+page5_top10_pcp = create_final_output_func(pcp_top10_sdf)
+
+insert_into_output_func(page5_top10_pcp.sort('facility_type','facility_id', 'rank'), TBL_NAME)
+
+upload_to_s3_func(TBL_NAME)
