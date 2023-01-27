@@ -5,7 +5,7 @@
 
 # COMMAND ----------
 
-def get_top_values(defhc, defhc_value, max_row, strat_col, subset=''):
+def get_top_values(defhc, defhc_value, max_row, strat_cols, subset=''):
     """
     Function get_top_values() to get aggregate claim counts for either pie chart (by network) or bar chart (by facility)
         used for either hospital/ASC charts (dashboard) or market share (facilities page)
@@ -16,7 +16,7 @@ def get_top_values(defhc, defhc_value, max_row, strat_col, subset=''):
         defhc str: prefix to id and name cols to specify network or facility, = 'net_defhc' for network, 'defhc' for facility
         defhc_value int: value for either your network or your facility
         max_row int: value for max row to keep, all others are collapsed (4 or 5)
-        strat_col str: name of col to stratify by
+        strat_cols list: list of col(s) to stratify by
         subset str: optional param to give additional subset for input table, default='' (no subset)
         
     returns:
@@ -31,6 +31,8 @@ def get_top_values(defhc, defhc_value, max_row, strat_col, subset=''):
         
     elif defhc == 'net_defhc':
         place_name = 'Network'
+        
+    strat_cols = ', '.join(strat_cols)
     
     return spark.sql(f"""
 
@@ -59,7 +61,7 @@ def get_top_values(defhc, defhc_value, max_row, strat_col, subset=''):
                    
                    ,case when {defhc}_id = {defhc_value} then 0 
                          when {defhc}_id is null then 100
-                         else row_number() over (partition by {strat_col}
+                         else row_number() over (partition by {strat_cols}
                                                  order by case when {defhc}_id is null or {defhc}_id = {defhc_value} then 0 
                                                                else cnt_claims 
                                                                end desc) 
@@ -71,14 +73,14 @@ def get_top_values(defhc, defhc_value, max_row, strat_col, subset=''):
            from (
                 select {defhc}_id
                        , {defhc}_name as {defhc}_name_raw
-                       , {strat_col}
+                       , {strat_cols}
                        , count(*) as cnt_claims
 
                 from {TMP_DATABASE}.{MX_CLMS_TBL}
                 {subset}
                 group by {defhc}_id
                        , {defhc}_name
-                       , {strat_col}
+                       , {strat_cols}
                 ) a
             ) b
         """)

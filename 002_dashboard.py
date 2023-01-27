@@ -235,7 +235,7 @@ upload_to_s3_func(TBL_NAME)
 hosp_asc_pie = get_top_values(defhc = 'net_defhc',
                                defhc_value = INPUT_NETWORK,
                                max_row = 4,
-                               strat_col='pos_cat',
+                               strat_cols=['pos_cat'],
                                subset="where pos_cat in ('ASC & HOPD', 'Hospital Inpatient')") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 
@@ -292,7 +292,7 @@ upload_to_s3_func(TBL_NAME)
 hosp_asc_bar = get_top_values(defhc = 'defhc',
                                defhc_value = DEFHC_ID,
                                max_row = 5,
-                               strat_col='pos_cat',
+                               strat_cols=['pos_cat'],
                                subset="where pos_cat in ('ASC & HOPD', 'Hospital Inpatient')") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 

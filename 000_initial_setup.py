@@ -318,5 +318,48 @@ pyspark_to_hive(schema, f"{DATABASE}.page4_net_leakage")
 
 # COMMAND ----------
 
+# MAGIC %md #### 3E. Facilities (Page 5)
+
+# COMMAND ----------
+
+# page5_facility_map
+
+schema = create_empty_output({'facility_id': IntegerType(),
+                              'facility_name': StringType(),
+                              'facility_type': StringType(),
+                              'latitude': DoubleType(),
+                              'longitude': DoubleType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_facility_map")
+
+# COMMAND ----------
+
+# page5_market_share
+
+schema = create_empty_output({'facility_type': StringType(),
+                              'network_label':  StringType(),
+                              'network_name': StringType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_market_share")
+
+# COMMAND ----------
+
+# page5_top10
+
+schema = create_empty_output({'facility_type': StringType(),
+                              'facility_id':  StringType(),
+                              'facility_name': StringType(),
+                              'network_flag': StringType(),
+                              'count': IntegerType(),
+                              'rank': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_top10")
+
+# COMMAND ----------
+
 exit_notebook(f"Initial setup run to create lookup tables: {', '.join(LOOKUP_TABLES)}",
               fail=False)

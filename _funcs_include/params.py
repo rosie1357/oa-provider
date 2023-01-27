@@ -78,7 +78,7 @@ def assign_fac_types(alias, current_col='FirmTypeName', new_col='facility_type')
     
     return f"""
         case when {alias}.{current_col} in ('Ambulatory Surgery Center', 'Hospital', 'Imaging Center', 'Physician Group',
-                                         'Renal Dialysis Facility', 'Retail Clinic', 'Urgent Care Clinic')
+                                            'Renal Dialysis Facility', 'Retail Clinic', 'Urgent Care Clinic')
                                          
                then {alias}.{current_col}
                

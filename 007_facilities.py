@@ -69,8 +69,8 @@ upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, 
 # subset nearby NPIs to non-null facility type and keep address info, look at count of facilities kept
 
 facilities_sdf = spark.sql(f"""
-        select distinct defhc_id
-                        ,defhc_name
+        select distinct defhc_id as facility_id
+                        ,defhc_name as facility_name
                         ,facility_type
                         ,latitude
                         ,longitude
@@ -84,7 +84,15 @@ sdf_frequency(facilities_sdf, ['facility_type'])
 
 # COMMAND ----------
 
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
 
+TBL_NAME = f"{DATABASE}.page5_facility_map"
+
+page5_facility_map = create_final_output_func(facilities_sdf)
+
+insert_into_output_func(page5_facility_map, TBL_NAME)
+
+upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
@@ -100,7 +108,7 @@ sdf_frequency(facilities_sdf, ['facility_type'])
 market_pie = get_top_values(defhc = 'net_defhc',
                             defhc_value = INPUT_NETWORK,
                             max_row = 4,
-                            strat_col='facility_type',
+                            strat_cols=['facility_type'],
                             subset="where facility_type is not null"
                            )
 
@@ -138,4 +146,62 @@ page5_market_share = create_final_output_func(market_pie)
 
 insert_into_output_func(page5_market_share.sort('facility_type', 'network_label'), TBL_NAME)
 
+#upload_to_s3_func(TBL_NAME)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC ### 3. Top 10 Facilities
+
+# COMMAND ----------
+
+# to calculate top 10 facilities by count of claims for given facility type,
+# read in full claims and order by claim count by facility name
+
+top10_sdf = spark.sql(f"""
+
+        select *
+                , row_number() over (partition by facility_type 
+                                     order by count desc)
+                               as rank
+       from (
+            select facility_type 
+                   , defhc_id as facility_id
+                   , defhc_name as facility_name
+                   , network_flag
+                   , count(*) as count
+
+            from {TMP_DATABASE}.{MX_CLMS_TBL}
+            where facility_type is not null
+            group by facility_type 
+                   , defhc_id
+                   , defhc_name
+                   , network_flag
+            ) a
+
+        """)
+
+top10_sdf.sort('facility_type','rank').display()
+
+# COMMAND ----------
+
+# confirm distinct by defhc_id
+
+sdf_check_distinct(top10_sdf, ['facility_id'])
+
+# COMMAND ----------
+
+# call create final output to join to base cols and add timestamp, filter to top 10, insert output for insert into table, and load to s3
+
+TBL_NAME = f"{DATABASE}.page5_top10"
+
+page5_top10 = create_final_output_func(top10_sdf.filter(F.col('rank')<=10))
+
+insert_into_output_func(page5_top10.sort('facility_type','rank'), TBL_NAME)
+
 upload_to_s3_func(TBL_NAME)
+
+# COMMAND ----------
+
+
