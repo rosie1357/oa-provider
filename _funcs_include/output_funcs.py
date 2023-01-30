@@ -63,7 +63,13 @@ def create_final_output(base_sdf, counts_sdf):
 
 def create_empty_output(measure_dict):
     """
-    
+    Function create_empty_output to read in dictionary of measure name and type to sandwich between base cols and final time stamp col
+    params:
+        measure_dict dictionary: dictionary of string name and measure type, eg '{'npi': IntegerType()}'
+
+    returns:
+        empty spark df with given fields
+        
     """
     
     # create set of initial base columns and final time stamp column

@@ -45,10 +45,6 @@ if RUN_SETUP == 1:
 
 # COMMAND ----------
 
-RUN_ARGUMENTS
-
-# COMMAND ----------
-
 # run notebook for main table creation
 
 returns = ast.literal_eval(dbutils.notebook.run('001_create_tables', 0, arguments = RUN_ARGUMENTS))

@@ -54,7 +54,7 @@ DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(
 
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
-INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network'])
+INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network', 'defhc_name'])
 
 # COMMAND ----------
 
@@ -193,28 +193,18 @@ cnt_pcp = pcp_spec_summary.filter(F.col('specialty_type')=='PCP').withColumnRena
 
 # MAGIC %md
 # MAGIC 
-# MAGIC #### 1B. Add DefHC Name
-
-# COMMAND ----------
-
-defhc_name = spark.sql(f"select defhc_name from {TMP_DATABASE}.input_org_info")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC #### 1C. Combine and Output All Counts
+# MAGIC #### 1B. Combine All Counts, add Name and Output
 
 # COMMAND ----------
 
 # combine individual counts
 
-all_counts = defhc_name.join(cnt_patient) \
-                        .join(cnt_inpat_hosp) \
+all_counts = cnt_patient.join(cnt_inpat_hosp) \
                         .join(cnt_pg) \
                         .join(cnt_asc) \
                         .join(cnt_pcp) \
-                        .join(cnt_spec)
+                        .join(cnt_spec) \
+                        .withColumn('defhc_name', F.lit(DEFHC_NAME))
 
 # COMMAND ----------
 
@@ -236,92 +226,18 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
-def hosp_asc_counts(defhc, defhc_value, max_row):
-    """
-    Function hosp_asc_counts() to get aggregate claim counts for either pie chart (by network) or bar chart (by facility)
-        will subset claims to hospital and ASC pos, and get count of claims by pos_cat and defhc_id or net_defhc_id
-        will create collapsed/formatted names and labels to collapse >4th or >5th positions (pie or bar, respectively)
-        
-    params:
-        defhc str: prefix to id and name cols to specify network or facility, = 'net_defhc' for network, 'defhc' for facility
-        defhc_value int: value for either your network or your facility
-        max_row int: value for max row to keep, all others are collapsed (4 or 5)
-        
-    returns:
-        spark df with claim counts at network or facility level
-    
-    """
-    
-    # assign place_name based on defhc (whether specified as defhc or net_defhc)
-    
-    if defhc == 'defhc':
-        place_name = 'Facility'
-        
-    elif defhc == 'net_defhc':
-        place_name = 'Network'
-    
-    return spark.sql(f"""
-
-        select *
-               
-               -- create collapsed/formatted values based on max row number to collapse, and label formatted specifically for your network/facility
-            
-               ,case when rn < {max_row} then {defhc}_id 
-                     else Null
-                     end as {defhc}_id_collapsed
-
-               ,case when rn < {max_row} then {defhc}_name
-                     else 'Other' 
-                     end as {place_name.lower()}_name
-
-              ,case when {defhc}_id = {defhc_value} then "1. Your {place_name}"
-                    when rn < {max_row} then concat(rn + 1, ". {place_name} ", rn + 1)
-                    else "{max_row+1}. Other"
-                    end as {place_name.lower()}_label
-
-        from (
-
-            select *
-            
-                   -- create rn to order networks separately for hospital/ASC, with your network as 0, null IDs as 100 (ignore), and all others by claim counts
-                   
-                   ,case when {defhc}_id = {defhc_value} then 0 
-                         when {defhc}_id is null then 100
-                         else row_number() over (partition by place_of_service
-                                                 order by case when {defhc}_id is null or {defhc}_id = {defhc_value} then 0 
-                                                               else cnt_claims 
-                                                               end desc) 
-                          end as rn
-
-                  ,case when {defhc}_id = {defhc_value} then concat('*', {defhc}_name_raw, '*') 
-                        else {defhc}_name_raw
-                        end as {defhc}_name
-           from (
-                select {defhc}_id
-                       , {defhc}_name as {defhc}_name_raw
-                       , pos_cat as place_of_service
-                       , count(*) as cnt_claims
-
-                from {TMP_DATABASE}.{MX_CLMS_TBL}
-                where pos_cat in ('ASC & HOPD', 'Hospital Inpatient')
-                group by {defhc}_id
-                       , {defhc}_name
-                       , pos_cat
-                ) a
-            ) b
-        """)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC 
 # MAGIC #### 2A. Pie chart Counts
 
 # COMMAND ----------
 
-hosp_asc_pie = hosp_asc_counts(defhc = 'net_defhc',
+hosp_asc_pie = get_top_values(defhc = 'net_defhc',
                                defhc_value = INPUT_NETWORK,
-                               max_row = 4)
+                               max_row = 4,
+                               strat_cols=['pos_cat'],
+                               subset="where pos_cat in ('ASC & HOPD', 'Hospital Inpatient')") \
+              .withColumnRenamed('pos_cat', 'place_of_service')
 
 hosp_asc_pie.createOrReplaceTempView('hosp_asc_pie_vw')
 
@@ -373,9 +289,12 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
-hosp_asc_bar = hosp_asc_counts(defhc = 'defhc',
+hosp_asc_bar = get_top_values(defhc = 'defhc',
                                defhc_value = DEFHC_ID,
-                               max_row = 5)
+                               max_row = 5,
+                               strat_cols=['pos_cat'],
+                               subset="where pos_cat in ('ASC & HOPD', 'Hospital Inpatient')") \
+              .withColumnRenamed('pos_cat', 'place_of_service')
 
 # COMMAND ----------
 

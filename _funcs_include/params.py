@@ -60,3 +60,31 @@ def affiliated_flag(affiliation_col, affiliation_value, suffix=''):
                else 'Independent'
                end as affiliated_flag{suffix}
          """
+
+# COMMAND ----------
+
+def assign_fac_types(alias, current_col='FirmTypeName', new_col='facility_type'):
+    """
+    Function assign_fac_types to return sql text to create facility_type col from input firmtype
+    params:
+        alias str: alias for table to get FirmTypeName from
+        current_col str: optional param for name of firm type existing column, default = FirmTypeName
+        new_col str: optional param for name of new column, default = facility_type
+    
+    returns:
+        sql case statement
+    
+    """
+    
+    return f"""
+        case when {alias}.{current_col} in ('Ambulatory Surgery Center', 'Hospital', 'Imaging Center', 'Physician Group',
+                                            'Renal Dialysis Facility', 'Retail Clinic', 'Urgent Care Clinic')
+                                         
+               then {alias}.{current_col}
+               
+               when {alias}.{current_col} in ('Assisted Living Facility', 'Home Health Agency', 'Hospice', 'Skilled Nursing Facility')
+               then 'Post-Acute'
+               
+               else null
+               end as {new_col}
+       """
