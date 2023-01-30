@@ -3,9 +3,9 @@
 # MAGIC 
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
 # MAGIC 
-# MAGIC ## Provider Dashboard: 007 Facilities
+# MAGIC ## Provider Dashboard: 006 Facilities
 # MAGIC 
-# MAGIC **Program:** 007_facilities
+# MAGIC **Program:** 006_facilities
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
 # MAGIC <br>

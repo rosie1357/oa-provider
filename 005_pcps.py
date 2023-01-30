@@ -3,9 +3,9 @@
 # MAGIC 
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
 # MAGIC 
-# MAGIC ## Provider Dashboard: 006 PCPs
+# MAGIC ## Provider Dashboard: 005 PCPs
 # MAGIC 
-# MAGIC **Program:** 006_pcps
+# MAGIC **Program:** 005_pcps
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
 # MAGIC <br>
