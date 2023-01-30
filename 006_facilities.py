@@ -3,9 +3,9 @@
 # MAGIC 
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
 # MAGIC 
-# MAGIC ## Provider Dashboard: 007 Facilities
+# MAGIC ## Provider Dashboard: 006 Facilities
 # MAGIC 
-# MAGIC **Program:** 007_facilities
+# MAGIC **Program:** 006_facilities
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
 # MAGIC <br>
@@ -107,7 +107,8 @@ upload_to_s3_func(TBL_NAME)
 # to calculate market share (count of claims) by network for given facility type,
 # call get_top_values() to count claims by facility type and identify top networks
 
-market_pie = get_top_values(defhc = 'net_defhc',
+market_pie = get_top_values(intable = f"{TMP_DATABASE}.{MX_CLMS_TBL}",
+                            defhc = 'net_defhc',
                             defhc_value = INPUT_NETWORK,
                             max_row = 4,
                             strat_cols=['facility_type'],
