@@ -26,3 +26,7 @@
 # COMMAND ----------
 
 # MAGIC %run ./output_funcs
+
+# COMMAND ----------
+
+# MAGIC %run ./chart_calc_funcs

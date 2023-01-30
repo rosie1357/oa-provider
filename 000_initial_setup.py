@@ -263,11 +263,6 @@ pyspark_to_hive(schema, f"{DATABASE}.page3_top_pcp_flow")
 
 # COMMAND ----------
 
-exit_notebook(f"Initial setup run to create lookup tables: {', '.join(LOOKUP_TABLES)}",
-              fail=False)
-
-# COMMAND ----------
-
 # MAGIC %md #### 3D. PCPs (Page 4)
 
 # COMMAND ----------
@@ -286,10 +281,11 @@ pyspark_to_hive(schema, f"{DATABASE}.page4_loyalty_map_pcps")
 
 # page4_pcp_dist 
 
-schema = create_empty_output({'specialty_cat_spec': StringType(),
+schema = create_empty_output({'npi_pcp': StringType(),
+                              'specialty_cat_spec': StringType(),
                               'affiliated_flag_pcp': StringType(),
-                              'loyalty_flag_pcp': StringType(),
-                              'count': IntegerType()
+                              'count_in_network': IntegerType(),
+                              'count_out_of_network': IntegerType()
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.page4_pcp_dist")
@@ -300,10 +296,12 @@ pyspark_to_hive(schema, f"{DATABASE}.page4_pcp_dist")
 
 schema = create_empty_output({'npi_pcp': StringType(),
                               'name_pcp': StringType(),
+                              'npi_url_pcp': StringType(),
                               'specialty_cat_spec': StringType(),
-                              'npi_spec': IntegerType(),
+                              'npi_spec': StringType(),
                               'name_spec': StringType(),
-                              'network_flag_spec': IntegerType(),
+                              'npi_url_spec': StringType(),
+                              'network_flag_spec': StringType(),
                               'count': IntegerType()
                              })
 
@@ -320,3 +318,80 @@ schema = create_empty_output({'specialty_cat_spec': StringType(),
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.page4_net_leakage")
+
+# COMMAND ----------
+
+# MAGIC %md #### 3E. Facilities (Page 5)
+
+# COMMAND ----------
+
+# page5_facility_map
+
+schema = create_empty_output({'facility_id': IntegerType(),
+                              'facility_name': StringType(),
+                              'facility_type': StringType(),
+                              'latitude': DoubleType(),
+                              'longitude': DoubleType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_facility_map")
+
+# COMMAND ----------
+
+# page5_market_share
+
+schema = create_empty_output({'facility_type': StringType(),
+                              'network_label':  StringType(),
+                              'network_name': StringType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_market_share")
+
+# COMMAND ----------
+
+# page5_top10_fac
+
+schema = create_empty_output({'facility_type': StringType(),
+                              'facility_id':  StringType(),
+                              'facility_name': StringType(),
+                              'network_flag': StringType(),
+                              'count': IntegerType(),
+                              'rank': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_top10_fac")
+
+# COMMAND ----------
+
+# page5_top10_pcp
+
+schema = create_empty_output({'facility_type': StringType(),
+                              'npi_pcp': StringType(),
+                              'name_pcp':  StringType(),
+                              'npi_url_pcp': StringType(),
+                              'facility_id': StringType(),
+                              'network_flag': StringType(),
+                              'count': IntegerType(),
+                              'rank': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_top10_pcp")
+
+# COMMAND ----------
+
+# page5_top10_postdis
+
+schema = create_empty_output({'facility_id':  StringType(),
+                              'discharge_facility_id':  StringType(),
+                              'discharge_facility_name': StringType(),
+                              'count': IntegerType(),
+                              'rank': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.page5_top10_postdis")
+
+# COMMAND ----------
+
+exit_notebook(f"Initial setup run to create lookup tables: {', '.join(LOOKUP_TABLES)}",
+              fail=False)
