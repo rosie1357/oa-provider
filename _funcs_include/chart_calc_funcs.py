@@ -5,7 +5,7 @@
 
 # COMMAND ----------
 
-def get_top_values(defhc, defhc_value, max_row, strat_cols, subset=''):
+def get_top_values(intable, defhc, defhc_value, max_row, strat_cols, subset=''):
     """
     Function get_top_values() to get aggregate claim counts for either pie chart (by network) or bar chart (by facility)
         used for either hospital/ASC charts (dashboard) or market share (facilities page)
@@ -13,6 +13,7 @@ def get_top_values(defhc, defhc_value, max_row, strat_cols, subset=''):
         will create collapsed/formatted names and labels to collapse >4th or >5th positions (pie or bar, respectively)
         
     params:
+        intable str: table to read from
         defhc str: prefix to id and name cols to specify network or facility, = 'net_defhc' for network, 'defhc' for facility
         defhc_value int: value for either your network or your facility
         max_row int: value for max row to keep, all others are collapsed (4 or 5)
@@ -76,7 +77,7 @@ def get_top_values(defhc, defhc_value, max_row, strat_cols, subset=''):
                        , {strat_cols}
                        , count(*) as cnt_claims
 
-                from {TMP_DATABASE}.{MX_CLMS_TBL}
+                from {intable}
                 {subset}
                 group by {defhc}_id
                        , {defhc}_name

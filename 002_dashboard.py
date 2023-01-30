@@ -146,12 +146,11 @@ hco_summary = spark.sql(f"""
          , count(distinct defhc_id) as cnt_providers
     
     from   {TMP_DATABASE}.nearby_hcos_id
+    where FirmTypeName in ('Ambulatory Surgery Center', 'Physician Group')
     
     group by FirmTypeName
     order by FirmTypeName
 """)
-
-# COMMAND ----------
 
 hco_summary.display()
 
@@ -232,11 +231,12 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
-hosp_asc_pie = get_top_values(defhc = 'net_defhc',
+hosp_asc_pie = get_top_values(intable = f"{TMP_DATABASE}.{MX_CLMS_TBL}",
+                               defhc = 'net_defhc',
                                defhc_value = INPUT_NETWORK,
                                max_row = 4,
                                strat_cols=['pos_cat'],
-                               subset="where pos_cat in ('ASC & HOPD', 'Hospital Inpatient')") \
+                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgical Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 
 hosp_asc_pie.createOrReplaceTempView('hosp_asc_pie_vw')
@@ -289,11 +289,12 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
-hosp_asc_bar = get_top_values(defhc = 'defhc',
+hosp_asc_bar = get_top_values(intable = f"{TMP_DATABASE}.{MX_CLMS_TBL}",
+                               defhc = 'defhc',
                                defhc_value = DEFHC_ID,
                                max_row = 5,
                                strat_cols=['pos_cat'],
-                               subset="where pos_cat in ('ASC & HOPD', 'Hospital Inpatient')") \
+                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgical Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 
 # COMMAND ----------
