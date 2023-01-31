@@ -122,7 +122,7 @@ print(f"Input firm type: {FIRM_TYPE}")
 
 # MAGIC %md
 # MAGIC 
-# MAGIC #### 1B. Create temp view of primary affiliations and specialties
+# MAGIC #### 1B. Create temp view of all HCPs with IDs/affiliations/specialty
 
 # COMMAND ----------
 
@@ -187,7 +187,7 @@ hcps.createOrReplaceTempView('hcps_base_vw')
 
 # MAGIC %md
 # MAGIC 
-# MAGIC #### 1C. Create temp view of NPIs with IDs/networks
+# MAGIC #### 1C. Create temp view of all HCO NPIs with IDs/networks
 
 # COMMAND ----------
 
@@ -391,7 +391,6 @@ df_nearby_hcos_npi.createOrReplaceTempView('df_nearby_hcos_npi_vw')
 
 # join nearby_hcos to d_profile to get firm and facility type, and save to temp directory
 
-
 df_nearby_hcos_id = spark.sql(f"""
     select no.*
         ,  pf.ProfileName as defhc_name
@@ -474,10 +473,11 @@ hive_sample(f"{TMP_DATABASE}.nearby_hcps")
 # COMMAND ----------
 
 # join nearby hcos by NPI to temp view for NPIs with IDs and networks
+# can use zip/lat/long for nearby only because only needed for nearby HCOs
 # save only nearby to permanent table
 
 hcos_npi_full = spark.sql(f"""
-    select o.npi
+      select o.npi
             , hn.zip
             , hn.latitude
             , hn.longitude
@@ -558,7 +558,7 @@ df_mxclaims_master = spark.sql(f"""
         
         , pos.pos_cat
         
-        , concat("{PHYS_LINK}", RenderingProviderNPI) as rendering_npi_url
+        , prov.npi_url as rendering_npi_url
         
     from   MxMart.F_MxClaim_v2 mc 
            inner join
@@ -604,7 +604,6 @@ referrals = spark.sql(f"""
         select a.*
              , pos.pos_cat as rend_pos_cat
                
-                     
        from (
         
             select ref_NPI 
@@ -693,7 +692,6 @@ referrals1.createOrReplaceTempView('referrals1_vw')
 # COMMAND ----------
 
 # read in above view and again join TWICE to all HCOs to join on HCO-level info for both PCP and spec,
-# creating indicators for valid PCP/spec facility
 # and subsetting to either BOTH providers nearby, or nearby PCP or spec facility
 
 referrals_fnl = spark.sql(f"""
@@ -720,10 +718,6 @@ referrals_fnl = spark.sql(f"""
 
             , ref.nearby as nearby_fac_pcp
             , rend.nearby as nearby_fac_spec
-            
-            , case when ref.npi is not null then 1 else 0 end as valid_fac_pcp
-            , case when rend.npi is not null then 1 else 0 end as valid_fac_spec
-
 
         from referrals1_vw a 
 
@@ -742,7 +736,7 @@ referrals_fnl = spark.sql(f"""
 
 # run crosstab for all indicators
 
-sdf_frequency(referrals_fnl, ['nearby_pcp', 'nearby_spec', 'valid_fac_pcp', 'valid_fac_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
+sdf_frequency(referrals_fnl, ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
 
 # COMMAND ----------
 
@@ -798,7 +792,6 @@ sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"), ['network_flag', 'n
 
 sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"), ['FirmTypeName', 'facility_type'], order='cols')
 
-
 # COMMAND ----------
 
 # CLAIMS: look at % null for joined on cols
@@ -823,9 +816,9 @@ sdf_frequency(sdf_claims, ['affiliated_flag', 'provider_primary_affiliation_id']
 
 # COMMAND ----------
 
-# REFERRALS: crosstab of network by network flag
+# REFERRALS: crosstab of all indicators
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"), ['network_id_spec', 'network_flag_spec'], with_pct=True, maxobs=100)
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
 
 # COMMAND ----------
 
