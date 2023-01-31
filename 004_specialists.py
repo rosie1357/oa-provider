@@ -172,6 +172,11 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
            ,count(*) as count
            
     from {TMP_DATABASE}.{PCP_REFS_TBL}
+    
+    where nearby_pcp=1 and 
+          nearby_spec=1 and
+          network_flag_spec is not null
+          
     group by npi_pcp
            ,name_pcp
            ,npi_url_pcp

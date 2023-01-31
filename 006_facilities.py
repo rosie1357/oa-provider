@@ -242,7 +242,8 @@ pcp_ranked_sdf = spark.sql(f"""
                ,count(*) as count
 
         from {TMP_DATABASE}.{PCP_REFS_TBL}
-        where facility_type_spec is not null
+        where nearby_fac_spec = 1 and 
+              facility_type_spec is not null
 
         group by facility_type_spec
                 ,npi_pcp
