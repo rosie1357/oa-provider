@@ -23,6 +23,9 @@
 # MAGIC   - MxMart.F_MxClaim_v2
 # MAGIC   
 # MAGIC **Outputs** (inserted into):
+# MAGIC   - {DATABASE}.page3_top_panel_specialists
+# MAGIC   - {DATABASE}.page3_shares
+# MAGIC   - {DATABASE}.page3_top_pcp_flow
 
 # COMMAND ----------
 

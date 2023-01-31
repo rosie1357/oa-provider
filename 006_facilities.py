@@ -21,6 +21,11 @@
 # MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
 # MAGIC   
 # MAGIC **Outputs** (inserted into):
+# MAGIC   - {DATABASE}.page5_facility_map
+# MAGIC   - {DATABASE}.page5_market_share
+# MAGIC   - {DATABASE}.page5_top10_fac
+# MAGIC   - {DATABASE}.page5_top10_pcp
+# MAGIC   - {DATABASE}.page5_top10_postdis
 
 # COMMAND ----------
 
