@@ -33,4 +33,4 @@ def test_distinct(sdf, name, cols):
     
     if 'NOT Distinct' in distinct_return:
         
-        exit_notebook(f"ERROR: Duplicate records by {', '.join(cols)} in {name}")
+        exit_notebook(f"ERROR: Duplicate records by {', '.join(cols)} in table '{name}'")

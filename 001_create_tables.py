@@ -868,7 +868,7 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"),
 # create exit function to run either before QC checks or after based on RUN_QC
 
 def exit():
-    exit_notebook(COUNTS_DICT,
+    exit_notebook({'all_counts': COUNTS_DICT},
                   fail=False)
 
 # COMMAND ----------
