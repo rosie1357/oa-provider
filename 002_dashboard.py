@@ -58,6 +58,22 @@ INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.in
 
 # COMMAND ----------
 
+# confirm widgets match org table
+
+test_widgets_match([DEFHC_ID, RADIUS], 
+                   f"{TMP_DATABASE}.input_org_info", 
+                   ['defhc_id', 'current_radius'] )
+
+# COMMAND ----------
+
+blah = [DEFHC_ID, RADIUS]
+
+values = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['defhc_id', 'current_radius'])
+
+all([x == y for x, y in zip(blah,values)])
+
+# COMMAND ----------
+
 # create base df to create partial for create_final_output function
 
 base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE)
@@ -366,12 +382,18 @@ upload_to_s3_func(TBL_NAME)
 # COMMAND ----------
 
 # read in pcp referrals table and count total referrals by network_flag
+# subset to nearby providers and valid specialist facility
 
 pcp_referrals = spark.sql(f"""
     select network_flag_spec as network_flag
           ,count(*) as count
           
     from {TMP_DATABASE}.{PCP_REFS_TBL}
+    
+    where nearby_pcp=1 and 
+          nearby_spec=1 and
+          network_flag_spec is not null
+          
     group by network_flag_spec
     order by network_flag_spec
     """)

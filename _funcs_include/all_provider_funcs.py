@@ -30,3 +30,7 @@
 # COMMAND ----------
 
 # MAGIC %run ./chart_calc_funcs
+
+# COMMAND ----------
+
+# MAGIC %run ./test_funcs

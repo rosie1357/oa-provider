@@ -21,6 +21,11 @@
 # MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
 # MAGIC   
 # MAGIC **Outputs** (inserted into):
+# MAGIC   - {DATABASE}.page5_facility_map
+# MAGIC   - {DATABASE}.page5_market_share
+# MAGIC   - {DATABASE}.page5_top10_fac
+# MAGIC   - {DATABASE}.page5_top10_pcp
+# MAGIC   - {DATABASE}.page5_top10_postdis
 
 # COMMAND ----------
 
@@ -44,6 +49,14 @@ DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
 INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network'])
+
+# COMMAND ----------
+
+# confirm widgets match org table
+
+test_widgets_match([DEFHC_ID, RADIUS], 
+                   f"{TMP_DATABASE}.input_org_info", 
+                   ['defhc_id', 'current_radius'] )
 
 # COMMAND ----------
 
@@ -237,7 +250,8 @@ pcp_ranked_sdf = spark.sql(f"""
                ,count(*) as count
 
         from {TMP_DATABASE}.{PCP_REFS_TBL}
-        where facility_type_spec is not null
+        where nearby_fac_spec = 1 and 
+              facility_type_spec is not null
 
         group by facility_type_spec
                 ,npi_pcp
