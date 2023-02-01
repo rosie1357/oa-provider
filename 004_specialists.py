@@ -23,6 +23,9 @@
 # MAGIC   - MxMart.F_MxClaim_v2
 # MAGIC   
 # MAGIC **Outputs** (inserted into):
+# MAGIC   - {DATABASE}.page3_top_panel_specialists
+# MAGIC   - {DATABASE}.page3_shares
+# MAGIC   - {DATABASE}.page3_top_pcp_flow
 
 # COMMAND ----------
 
@@ -44,6 +47,14 @@ DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
 INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network'])
+
+# COMMAND ----------
+
+# confirm widgets match org table
+
+test_widgets_match([DEFHC_ID, RADIUS], 
+                   f"{TMP_DATABASE}.input_org_info", 
+                   ['defhc_id', 'current_radius'] )
 
 # COMMAND ----------
 
@@ -169,6 +180,11 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
            ,count(*) as count
            
     from {TMP_DATABASE}.{PCP_REFS_TBL}
+    
+    where nearby_pcp=1 and 
+          nearby_spec=1 and
+          network_flag_spec is not null
+          
     group by npi_pcp
            ,name_pcp
            ,npi_url_pcp

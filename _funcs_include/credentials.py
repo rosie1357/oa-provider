@@ -1,8 +1,11 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC 
-# MAGIC **credentials.py: This notebook gets aws credentials from specified location**
+# MAGIC **credentials.py: This notebook gets aws credentials from secrets**
 
 # COMMAND ----------
 
-# MAGIC %run /Users/rosie.malsberger@definitivehc.com/_AWS_CREDS/_aws_creds_provider
+AWS_CREDS = {
+    'aws_access_key_id': dbutils.secrets.get(scope = 'ds_credentials', key = 'aws-oa-access-key'),
+    'aws_secret_access_key': dbutils.secrets.get(scope = 'ds_credentials', key = 'aws-oa-secret-access-key')
+}
