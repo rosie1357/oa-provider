@@ -627,6 +627,9 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"),
 
 # COMMAND ----------
 
+# join full claims to HCO NPIs and HCP NPIs, keeping claims where EITHER the HCO or the provider is nearby
+# (will use different subsets on different tables)
+
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
            mc.DHCClaimId
@@ -646,13 +649,14 @@ df_mxclaims_master = spark.sql(f"""
         ,  np.net_defhc_name
         ,  np.network_flag
         ,  np.facility_type
+        ,  np.nearby as nearby_fac
         
         , prov.PrimarySpecialty
         , prov.ProviderName
         , prov.specialty_cat
         , prov.specialty_type
         , prov.include_pie
-        , prov.nearby
+        , prov.nearby as nearby_prov
                 
         , prov.defhc_id_primary as provider_primary_affiliation_id
         , {affiliated_flag('prov.defhc_id_primary', DEFHC_ID)}
@@ -662,19 +666,21 @@ df_mxclaims_master = spark.sql(f"""
         , prov.npi_url as rendering_npi_url
         
     from   MxMart.F_MxClaim_v2 mc 
-           inner join
-           {TMP_DATABASE}.nearby_hcos_npi np
-           on np.NPI = ifnull(mc.FacilityNPI, mc.BillingProviderNPI)
+    
+           left join  hcos_npi_full_vw np
+           on         np.NPI = ifnull(mc.FacilityNPI, mc.BillingProviderNPI)
            
            left join  hcps_full_vw prov
            on         mc.RenderingProviderNPI = prov.NPI
            
-           left   join {DATABASE}.pos_category_assign pos
-           on     mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
+           left join {DATABASE}.pos_category_assign pos
+           on        mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
            
-    where  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE}' and
+    where  (np.nearby = 1 or prov.nearby = 1) and 
+           to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE}' and
            mc.MxClaimYear >= 2016 and
            mc.MxClaimMonth between 1 and 12
+           
            
 """)
 
@@ -685,7 +691,7 @@ df_mxclaims_master = spark.sql(f"""
 TBL = f"{TMP_DATABASE}.{MX_CLMS_TBL}"
 
 pyspark_to_hive(df_mxclaims_master,
-               TBL)
+               TBL, overwrite_schema='true')
 
 COUNTS_DICT[TBL] = hive_tbl_count(TBL)
 
@@ -697,6 +703,10 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"),
               name = f"{TMP_DATABASE}.{MX_CLMS_TBL}",
               cols = ['DHCClaimId']
              )
+
+# COMMAND ----------
+
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"), ['nearby_fac', 'nearby_prov'],with_pct=True)
 
 # COMMAND ----------
 
