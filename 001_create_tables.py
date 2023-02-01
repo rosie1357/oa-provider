@@ -50,13 +50,17 @@ from pyspark.sql.types import IntegerType
 
 # COMMAND ----------
 
-#TODO: figure out how to write all var names ONCE and convert list to variables/vice-versa
+# get widget values
 
 RUN_VALUES = get_widgets()
 
 DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC'])
 
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
+
+# create dictionary of counts to fill in for each perm table and return on pass
+
+COUNTS_DICT = {}
 
 # COMMAND ----------
 
@@ -431,7 +435,7 @@ df_nearby_hcos_npi.createOrReplaceTempView('df_nearby_hcos_npi_vw')
 
 # COMMAND ----------
 
-# join nearby_hcos to d_profile to get firm and facility type, and save to temp directory
+# join nearby_hcos to d_profile to get firm and facility type
 
 df_nearby_hcos_id = spark.sql(f"""
     select no.*
@@ -448,14 +452,18 @@ df_nearby_hcos_id = spark.sql(f"""
 
 """)
 
-pyspark_to_hive(df_nearby_hcos_id,
-               f"{TMP_DATABASE}.nearby_hcos_id")
-
 # COMMAND ----------
 
-# print sample of records
+# save to temp directory, put counts into dictionary, and print sample of records
 
-hive_sample(f"{TMP_DATABASE}.nearby_hcos_id")
+TBL = f"{TMP_DATABASE}.nearby_hcos_id"
+
+pyspark_to_hive(df_nearby_hcos_id,
+               TBL)
+
+COUNTS_DICT[TBL] = hive_tbl_count(TBL)
+
+hive_sample(TBL)
 
 # COMMAND ----------
 
@@ -514,16 +522,16 @@ test_distinct(sdf = hcps_full,
 
 # COMMAND ----------
 
-# save output table of nearby hcps only by filtering nearby==1
+# save to temp directory (filtering to nearby==1), put counts into dictionary, and print sample of records
+
+TBL = f"{TMP_DATABASE}.nearby_hcps"
 
 pyspark_to_hive(hcps_full.filter(F.col('nearby')==1).drop('nearby'),
-               f"{TMP_DATABASE}.nearby_hcps")
+               TBL)
 
-# COMMAND ----------
+COUNTS_DICT[TBL] = hive_tbl_count(TBL)
 
-# print sample of records
-
-hive_sample(f"{TMP_DATABASE}.nearby_hcps")
+hive_sample(TBL)
 
 # COMMAND ----------
 
@@ -583,14 +591,16 @@ test_distinct(sdf = hcos_npi_full,
 
 # COMMAND ----------
 
+# save to temp directory (filtering to nearby==1), put counts into dictionary, and print sample of records
+
+TBL = f"{TMP_DATABASE}.nearby_hcos_npi"
+
 pyspark_to_hive(hcos_npi_full.filter(F.col('nearby')==1).drop('nearby'),
-               f"{TMP_DATABASE}.nearby_hcos_npi")
+               TBL)
 
-# COMMAND ----------
+COUNTS_DICT[TBL] = hive_tbl_count(TBL)
 
-# print sample of records
-
-hive_sample(f"{TMP_DATABASE}.nearby_hcos_npi")
+hive_sample(TBL)
 
 # COMMAND ----------
 
@@ -668,16 +678,16 @@ df_mxclaims_master = spark.sql(f"""
 
 # COMMAND ----------
 
-# save to temp database
+# save to temp directory, put counts into dictionary, and print sample of records
+
+TBL = f"{TMP_DATABASE}.{MX_CLMS_TBL}"
 
 pyspark_to_hive(df_mxclaims_master,
-               f"{TMP_DATABASE}.{MX_CLMS_TBL}")
+               TBL)
 
-# COMMAND ----------
+COUNTS_DICT[TBL] = hive_tbl_count(TBL)
 
-# print sample of records
-
-hive_sample(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
+hive_sample(TBL)
 
 # COMMAND ----------
 
@@ -833,16 +843,16 @@ referrals_fnl = spark.sql(f"""
 
 # COMMAND ----------
 
-# save to temp database
+# save to temp directory, put counts into dictionary, and print sample of records
+
+TBL = f"{TMP_DATABASE}.{PCP_REFS_TBL}"
 
 pyspark_to_hive(referrals_fnl,
-               f"{TMP_DATABASE}.{PCP_REFS_TBL}", overwrite_schema='true')
+               TBL)
 
-# COMMAND ----------
+COUNTS_DICT[TBL] = hive_tbl_count(TBL)
 
-# print sample of records
-
-hive_sample(f"{TMP_DATABASE}.{PCP_REFS_TBL}")
+hive_sample(TBL)
 
 # COMMAND ----------
 
@@ -855,17 +865,11 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"),
 
 # COMMAND ----------
 
-# run crosstab for all indicators
-
-sdf_frequency(referrals_fnl, ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
-
-# COMMAND ----------
-
 # create exit function to run either before QC checks or after based on RUN_QC
 
 def exit():
-    exit_notebook(f"All provider and claims tables created for {DEFHC_ID}!",
-              fail=False)
+    exit_notebook(COUNTS_DICT,
+                  fail=False)
 
 # COMMAND ----------
 

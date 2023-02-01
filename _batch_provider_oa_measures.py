@@ -50,7 +50,7 @@ if RUN_SETUP == 1:
 returns = ast.literal_eval(dbutils.notebook.run('001_create_tables', 0, arguments = RUN_ARGUMENTS))
 
 notebook_returns_passthrough(returns_dict = returns,
-                             pass_message = returns['message']
+                             pass_message = "All tables created:" + '\n\t' + ',  '.join({f"{k}: {v}" for k,v in returns.get(COUNTS_DICT,{}).items() if k != 'fail'})
                             )
 
 # COMMAND ----------
