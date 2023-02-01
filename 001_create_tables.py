@@ -185,6 +185,15 @@ hcps.createOrReplaceTempView('hcps_base_vw')
 
 # COMMAND ----------
 
+# confirm unique by npi
+
+test_distinct(sdf = hcps,
+              name = 'all_hcps',
+              cols = ['npi']
+             )
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC 
 # MAGIC #### 1C. Create temp view of all HCO NPIs with IDs/networks
@@ -247,6 +256,15 @@ hcos_npi.createOrReplaceTempView('hcos_npi_base_vw')
 
 # COMMAND ----------
 
+# confirm unique by npi
+
+test_distinct(sdf = hcos_npi,
+              name = 'all_hcos_npi',
+              cols = ['npi']
+             )
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC 
 # MAGIC ### 2. Find nearly facilities
@@ -284,6 +302,8 @@ df_hco_profile_coords = spark.sql(f"""
                                 from   npi_hco_mapping.dhc_pg_location_addresses
                                 """).toPandas()
 
+# COMMAND ----------
+
 # Latitude & Longitude by TYPE 1 NPI (only those tracked as physicians)
 # This data is complete, i.e. every physician has a longitude and latitude 
 
@@ -295,11 +315,33 @@ df_hcp_profile_coords = spark.sql(f"""
                                 from   definitivehc.hospital_physician_compare_physicians
                                 """).toPandas()
 
+# COMMAND ----------
+
 # Latitude & Longitude by TYPE 2 NPI (from NPI registry)
 # This data may not be complete, as it relies on the geocoding processes from DB engineering and Data Science 
 # Some addresses fail geocoding 
 # Default to the longitude and latitude of the main location from the defhc profile if not available at the NPI level 
 # It is preferable to use the geo of the NPI when using claims data especially for profiles that have multiple locations (PGs)
+
+# QUICK FIX!! the table npi_hco_mapping.ds_geocoded_addresses currently has multiple records per address
+# until this is fixed, take first record by lat/long per address with non-null lat/long
+
+geo_addrs = spark.sql("""
+
+    select address_to_geo
+           ,latitude
+           ,longitude
+           ,row_number() over (partition by address_to_geo
+                               order by latitude, longitude )
+                         as rn
+           
+   from npi_hco_mapping.ds_geocoded_addresses
+   where latitude is not null
+
+""")
+
+geo_addrs.filter(F.col('rn')==1).createOrReplaceTempView('geo_addrs_vw')
+
 
 df_hco_npi_coords = spark.sql(f"""
                             select cast(na.NPI as int) as NPI
@@ -309,7 +351,7 @@ df_hco_npi_coords = spark.sql(f"""
                                 ,  m.defhc_id
                                 
                             from   npi_hco_mapping.npi_registry_addresses na 
-                                   left   join npi_hco_mapping.ds_geocoded_addresses geo
+                                   left   join geo_addrs_vw geo
                                    on     na.address_to_geo = geo.address_to_geo 
                                    
                                    left   join npi_hco_mapping.lookup_npi_hco m
@@ -417,6 +459,15 @@ hive_sample(f"{TMP_DATABASE}.nearby_hcos_id")
 
 # COMMAND ----------
 
+# confirm unique by id for primary location
+
+test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcos_id").filter(F.col('primary')==1),
+              name = f"{TMP_DATABASE}.nearby_hcos_id",
+              cols = ['defhc_id']
+             )
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC 
 # MAGIC ##### 2Cii. Nearby HCPs
@@ -438,6 +489,7 @@ hcps_full = spark.sql(f"""
         
         , pv.specialty_cat
         , pv.specialty_type
+        , pv.include_pie
         
         , pv.npi_url
         
@@ -453,6 +505,15 @@ hcps_full.createOrReplaceTempView('hcps_full_vw')
 
 # COMMAND ----------
 
+# check distinct on full table
+
+test_distinct(sdf = hcps_full,
+              name = 'all_hcps_w_nearby',
+              cols = ['npi']
+             )
+
+# COMMAND ----------
+
 # save output table of nearby hcps only by filtering nearby==1
 
 pyspark_to_hive(hcps_full.filter(F.col('nearby')==1).drop('nearby'),
@@ -463,6 +524,15 @@ pyspark_to_hive(hcps_full.filter(F.col('nearby')==1).drop('nearby'),
 # print sample of records
 
 hive_sample(f"{TMP_DATABASE}.nearby_hcps")
+
+# COMMAND ----------
+
+# check distinct on nearby only table
+
+test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcps"),
+              name = f"{TMP_DATABASE}.nearby_hcps",
+              cols = ['npi']
+             )
 
 # COMMAND ----------
 
@@ -504,6 +574,15 @@ hcos_npi_full.createOrReplaceTempView('hcos_npi_full_vw')
 
 # COMMAND ----------
 
+# check distinct on full table
+
+test_distinct(sdf = hcos_npi_full,
+              name = 'all_hcos_npi_w_nearby',
+              cols = ['npi']
+             )
+
+# COMMAND ----------
+
 pyspark_to_hive(hcos_npi_full.filter(F.col('nearby')==1).drop('nearby'),
                f"{TMP_DATABASE}.nearby_hcos_npi")
 
@@ -512,6 +591,15 @@ pyspark_to_hive(hcos_npi_full.filter(F.col('nearby')==1).drop('nearby'),
 # print sample of records
 
 hive_sample(f"{TMP_DATABASE}.nearby_hcos_npi")
+
+# COMMAND ----------
+
+# check distinct on nearby table
+
+test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"),
+              name = f"{TMP_DATABASE}.nearby_hcos_npi",
+              cols = ['npi']
+             )
 
 # COMMAND ----------
 
@@ -552,6 +640,7 @@ df_mxclaims_master = spark.sql(f"""
         , prov.specialty_cat
         , prov.specialty_type
         , prov.include_pie
+        , prov.nearby
                 
         , prov.defhc_id_primary as provider_primary_affiliation_id
         , {affiliated_flag('prov.defhc_id_primary', DEFHC_ID)}
@@ -592,6 +681,13 @@ hive_sample(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
 
 # COMMAND ----------
 
+test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"),
+              name = f"{TMP_DATABASE}.{MX_CLMS_TBL}",
+              cols = ['DHCClaimId']
+             )
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC 
 # MAGIC #### 3B. PCP referrals claims table
@@ -606,7 +702,8 @@ referrals = spark.sql(f"""
                
        from (
         
-            select ref_NPI 
+            select rend_claim_id
+               ,   ref_NPI 
                ,   rend_NPI 
                ,   rend_claim_date
                ,   patient_id 
@@ -618,7 +715,8 @@ referrals = spark.sql(f"""
 
             union  distinct 
 
-            select ref_NPI 
+            select rend_claim_id
+               ,   ref_NPI 
                ,   rend_NPI 
                ,   rend_claim_date
                ,   patient_id 
@@ -643,7 +741,8 @@ referrals.createOrReplaceTempView('referrals_vw')
 # read in above referrals view and join TWICE to provider-level info (hcps_full_vw) for both PCP and spec
 
 referrals1 = spark.sql(f"""
-    select patient_id
+    select rend_claim_id
+         , patient_id
          , rend_pos
          , rend_pos_cat
         
@@ -734,12 +833,6 @@ referrals_fnl = spark.sql(f"""
 
 # COMMAND ----------
 
-# run crosstab for all indicators
-
-sdf_frequency(referrals_fnl, ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
-
-# COMMAND ----------
-
 # save to temp database
 
 pyspark_to_hive(referrals_fnl,
@@ -750,6 +843,21 @@ pyspark_to_hive(referrals_fnl,
 # print sample of records
 
 hive_sample(f"{TMP_DATABASE}.{PCP_REFS_TBL}")
+
+# COMMAND ----------
+
+# confirm distinct by rend_claim_id
+
+test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"),
+              name = f"{TMP_DATABASE}.{PCP_REFS_TBL}",
+              cols = ['rend_claim_id']
+             )
+
+# COMMAND ----------
+
+# run crosstab for all indicators
+
+sdf_frequency(referrals_fnl, ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
 
 # COMMAND ----------
 
