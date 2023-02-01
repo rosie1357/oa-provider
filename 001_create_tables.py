@@ -77,7 +77,8 @@ COUNTS_DICT = {}
 # COMMAND ----------
 
 input_org_info = spark.sql(f"""
-    select hospital_name as defhc_name
+    select hospital_id as defhc_id
+        , hospital_name as defhc_name
         ,  network_id as input_network
         ,  firm_type
         ,  trim(concat(ifnull(hq_address, ''), ' ', ifnull(hq_address1, ''))) as address 
@@ -86,6 +87,7 @@ input_org_info = spark.sql(f"""
         ,  hq_zip_code as defhc_zip
         ,  hq_latitude as defhc_lat
         ,  hq_longitude as defhc_long
+        ,  {RADIUS} as current_radius
     from   definitivehc.hospital_all_companies 
     where  hospital_id = {DEFHC_ID}""")
 

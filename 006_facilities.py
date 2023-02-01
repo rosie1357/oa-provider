@@ -52,6 +52,14 @@ INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info
 
 # COMMAND ----------
 
+# confirm widgets match org table
+
+test_widgets_match([DEFHC_ID, RADIUS], 
+                   f"{TMP_DATABASE}.input_org_info", 
+                   ['defhc_id', 'current_radius'] )
+
+# COMMAND ----------
+
 # create base df to create partial for create_final_output function
 
 base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE)
