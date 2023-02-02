@@ -50,6 +50,10 @@ TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
 INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network'])
 
+# create dictionary of counts to fill in for each table insert and return on pass
+
+COUNTS_DICT = {}
+
 # COMMAND ----------
 
 # confirm widgets match org table
@@ -105,7 +109,7 @@ TBL_NAME = f"{DATABASE}.page5_facility_map"
 
 page5_facility_map = create_final_output_func(facilities_sdf)
 
-insert_into_output_func(page5_facility_map, TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_facility_map, TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -160,7 +164,7 @@ TBL_NAME = f"{DATABASE}.page5_market_share"
 
 page5_market_share = create_final_output_func(market_pie)
 
-insert_into_output_func(page5_market_share.sort('facility_type', 'network_label'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_market_share.sort('facility_type', 'network_label'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -214,7 +218,7 @@ TBL_NAME = f"{DATABASE}.page5_top10_fac"
 
 page5_top10 = create_final_output_func(fac_ranked_sdf.filter(F.col('rank')<=10))
 
-insert_into_output_func(page5_top10.sort('facility_type','rank'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_top10.sort('facility_type','rank'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -290,7 +294,7 @@ TBL_NAME = f"{DATABASE}.page5_top10_pcp"
 
 page5_top10_pcp = create_final_output_func(pcp_top10_sdf)
 
-insert_into_output_func(page5_top10_pcp.sort('facility_type','facility_id', 'rank'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_top10_pcp.sort('facility_type','facility_id', 'rank'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -334,6 +338,6 @@ TBL_NAME = f"{DATABASE}.page5_top10_postdis"
 
 top10_postdis = create_final_output_func(top10_postdis_sdf)
 
-insert_into_output_func(top10_postdis.sort('facility_id', 'rank'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(top10_postdis.sort('facility_id', 'rank'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
