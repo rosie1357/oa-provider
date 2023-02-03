@@ -632,8 +632,7 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"),
 
 # COMMAND ----------
 
-# join full claims to HCO NPIs and HCP NPIs, keeping claims where EITHER the HCO or the provider is nearby
-# (will use different subsets on different tables)
+# inner join full claims to nearby HCO NPIs, and join to all HCP NPIs, keeping indicator for nearby HCP
 
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
@@ -654,7 +653,6 @@ df_mxclaims_master = spark.sql(f"""
         ,  np.net_defhc_name
         ,  np.network_flag
         ,  np.facility_type
-        ,  np.nearby as nearby_fac
         
         , prov.PrimarySpecialty
         , prov.ProviderName
@@ -672,7 +670,7 @@ df_mxclaims_master = spark.sql(f"""
         
     from   MxMart.F_MxClaim mc 
     
-           left join  hcos_npi_full_vw np
+           inner join {TMP_DATABASE}.nearby_hcos_npi np
            on         np.NPI = ifnull(mc.FacilityNPI, mc.BillingProviderNPI)
            
            left join  hcps_full_vw prov
@@ -681,8 +679,7 @@ df_mxclaims_master = spark.sql(f"""
            left join {DATABASE}.pos_category_assign pos
            on        mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
            
-    where  (np.nearby = 1 or prov.nearby = 1) and 
-           to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE}' and
+    where  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE}' and
            mc.MxClaimYear >= 2016 and
            mc.MxClaimMonth between 1 and 12
            
@@ -711,7 +708,7 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"),
 
 # COMMAND ----------
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"), ['nearby_fac', 'nearby_prov'],with_pct=True)
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"), ['nearby_prov'],with_pct=True)
 
 # COMMAND ----------
 
@@ -817,8 +814,8 @@ referrals1.createOrReplaceTempView('referrals1_vw')
 
 # COMMAND ----------
 
-# read in above view and again join TWICE to all HCOs to join on HCO-level info for both PCP and spec,
-# and subsetting to either BOTH providers nearby, or nearby PCP or spec facility
+# read in above view and again join TWICE to all HCOs to join on HCO-level info for both PCP and spec
+# subset to nearby spec (rendering) facilities
 
 referrals_fnl = spark.sql(f"""
 
@@ -850,11 +847,11 @@ referrals_fnl = spark.sql(f"""
             left   join hcos_npi_full_vw ref
             on     a.npi_fac_pcp = ref.npi
 
-            left   join hcos_npi_full_vw rend
+            inner   join hcos_npi_full_vw rend
             on     a.npi_fac_spec = rend.npi
         ) b
         
-    where (nearby_pcp=1 and nearby_spec=1) or nearby_fac_pcp=1 or nearby_fac_spec=1
+    where nearby_fac_spec=1
     
 """)
 

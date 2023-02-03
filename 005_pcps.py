@@ -92,10 +92,6 @@ page4_loyalty_map_sdf = spark.sql(f"""
         ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
         
     from   {TMP_DATABASE}.{PCP_REFS_TBL}
-    
-    where nearby_pcp=1 and 
-          nearby_spec=1 and
-          network_flag_spec is not null
           
     group  by specialty_cat_spec
         ,  zip_pcp 
@@ -130,10 +126,6 @@ page4_pcp_dist_sdf = spark.sql(f"""
         ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
            
     from   {TMP_DATABASE}.{PCP_REFS_TBL}
-    
-    where nearby_pcp=1 and 
-          nearby_spec=1 and
-          network_flag_spec is not null
          
    group   by npi_pcp
        ,   specialty_cat_spec
@@ -176,10 +168,6 @@ page4_patient_flow_pcps_sdf = spark.sql(f"""
         ,  count(*) as count
            
     from   {TMP_DATABASE}.{PCP_REFS_TBL}
-    
-    where nearby_pcp=1 and 
-          nearby_spec=1 and
-          network_flag_spec is not null
           
     group by npi_pcp
         ,  name_pcp
@@ -220,9 +208,7 @@ page4_net_leakage_sdf = spark.sql(f"""
         ,  count(*) as count
         
     from   {TMP_DATABASE}.{PCP_REFS_TBL} 
-    where  nearby_pcp = 1
-    and    nearby_spec = 1 
-    and    net_defhc_id_pcp = {INPUT_NETWORK}
+    where  net_defhc_id_pcp = {INPUT_NETWORK}
     and    net_defhc_id_spec != {INPUT_NETWORK}
     and    net_defhc_id_spec is not null
     
