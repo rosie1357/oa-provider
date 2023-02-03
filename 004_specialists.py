@@ -209,3 +209,8 @@ page3_top_pcp_flow = create_final_output_func(page3_top_pcp_flow_sdf)
 COUNTS_DICT[TBL_NAME] = insert_into_output_func(page3_top_pcp_flow.sort('npi_pcp', 'npi_spec'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
+
+# COMMAND ----------
+
+exit_notebook({'all_counts': COUNTS_DICT},
+              fail=False)

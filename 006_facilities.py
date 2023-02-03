@@ -323,3 +323,8 @@ top10_postdis = create_final_output_func(top10_postdis_sdf)
 COUNTS_DICT[TBL_NAME] = insert_into_output_func(top10_postdis.sort('facility_id', 'rank'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
+
+# COMMAND ----------
+
+exit_notebook({'all_counts': COUNTS_DICT},
+              fail=False)

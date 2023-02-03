@@ -229,3 +229,8 @@ page4_net_leakage = create_final_output_func(page4_net_leakage_sdf)
 COUNTS_DICT[TBL_NAME] = insert_into_output_func(page4_net_leakage.sort('specialty_cat_spec'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
+
+# COMMAND ----------
+
+exit_notebook({'all_counts': COUNTS_DICT},
+              fail=False)
