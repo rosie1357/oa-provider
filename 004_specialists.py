@@ -19,8 +19,6 @@
 # MAGIC   - {TMP_DATABASE}.nearby_hcps
 # MAGIC   - {TMP_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
-# MAGIC   - MartDim.D_Organization
-# MAGIC   - MxMart.F_MxClaim_v2
 # MAGIC   
 # MAGIC **Outputs** (inserted into):
 # MAGIC   - {DATABASE}.page3_top_panel_specialists
@@ -47,6 +45,10 @@ DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(
 TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
 INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network'])
+
+# create dictionary of counts to fill in for each table insert and return on pass
+
+COUNTS_DICT = {}
 
 # COMMAND ----------
 
@@ -107,7 +109,7 @@ TBL_NAME = f"{DATABASE}.page3_top_panel_specialists"
 
 page3_top_panel_specialists = create_final_output_func(page3_top_sdf)
 
-insert_into_output_func(page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliated_flag'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliated_flag'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -131,8 +133,10 @@ page3_shares_sdf = spark.sql(f"""
            ,count(*) as count
            
    from {TMP_DATABASE}.{MX_CLMS_TBL}
-   where specialty_type = 'Specialist' and 
-         pos_cat in ('ASC & HOPD', 'Hospital Inpatient')
+   where ( (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgical Center', 'Hospital')) or
+           (pos_cat='Hospital Inpatient' and facility_type='Hospital') 
+          ) and 
+          specialty_type = 'Specialist'
          
    group by net_defhc_id
            ,net_defhc_name
@@ -151,7 +155,7 @@ TBL_NAME = f"{DATABASE}.page3_shares"
 
 page3_shares = create_final_output_func(page3_shares_sdf)
 
-insert_into_output_func(page3_shares.sort('net_defhc_id', 'net_defhc_name', 'specialty_cat'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page3_shares.sort('net_defhc_id', 'net_defhc_name', 'specialty_cat'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -163,7 +167,7 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
-# read in referrals and aggregate 
+# read in referrals and aggregate
 
 page3_top_pcp_flow_sdf = spark.sql(f"""
     
@@ -180,10 +184,6 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
            ,count(*) as count
            
     from {TMP_DATABASE}.{PCP_REFS_TBL}
-    
-    where nearby_pcp=1 and 
-          nearby_spec=1 and
-          network_flag_spec is not null
           
     group by npi_pcp
            ,name_pcp
@@ -206,6 +206,11 @@ TBL_NAME = f"{DATABASE}.page3_top_pcp_flow"
 
 page3_top_pcp_flow = create_final_output_func(page3_top_pcp_flow_sdf)
 
-insert_into_output_func(page3_top_pcp_flow.sort('npi_pcp', 'npi_spec'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page3_top_pcp_flow.sort('npi_pcp', 'npi_spec'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
+
+# COMMAND ----------
+
+exit_notebook({'all_counts': COUNTS_DICT},
+              fail=False)

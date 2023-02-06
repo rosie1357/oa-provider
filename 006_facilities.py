@@ -50,6 +50,10 @@ TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
 INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network'])
 
+# create dictionary of counts to fill in for each table insert and return on pass
+
+COUNTS_DICT = {}
+
 # COMMAND ----------
 
 # confirm widgets match org table
@@ -105,7 +109,7 @@ TBL_NAME = f"{DATABASE}.page5_facility_map"
 
 page5_facility_map = create_final_output_func(facilities_sdf)
 
-insert_into_output_func(page5_facility_map, TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_facility_map, TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -160,7 +164,7 @@ TBL_NAME = f"{DATABASE}.page5_market_share"
 
 page5_market_share = create_final_output_func(market_pie)
 
-insert_into_output_func(page5_market_share.sort('facility_type', 'network_label'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_market_share.sort('facility_type', 'network_label'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -202,9 +206,12 @@ fac_ranked_sdf.sort('facility_type','rank').display()
 
 # COMMAND ----------
 
-# confirm distinct by defhc_id
+# confirm distinct by facility_id
 
-sdf_check_distinct(fac_ranked_sdf, ['facility_id'])
+test_distinct(sdf = fac_ranked_sdf,
+              name = 'Facilities for Top 10 Chart',
+              cols = ['facility_id']
+             )
 
 # COMMAND ----------
 
@@ -214,7 +221,7 @@ TBL_NAME = f"{DATABASE}.page5_top10_fac"
 
 page5_top10 = create_final_output_func(fac_ranked_sdf.filter(F.col('rank')<=10))
 
-insert_into_output_func(page5_top10.sort('facility_type','rank'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_top10.sort('facility_type','rank'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -230,7 +237,6 @@ upload_to_s3_func(TBL_NAME)
 # subset the referrals table to non-null spec facility_type (rendering facility), and count
 # referrals by PCP info, facility and facility_type
 # rank PCPs within given facility/facility type
-# inner join to sdf with all nearby IDs (referrals are only filtered to nearby HCPs, not nearby HCOs)
 
 pcp_ranked_sdf = spark.sql(f"""
 
@@ -250,8 +256,7 @@ pcp_ranked_sdf = spark.sql(f"""
                ,count(*) as count
 
         from {TMP_DATABASE}.{PCP_REFS_TBL}
-        where nearby_fac_spec = 1 and 
-              facility_type_spec is not null
+        where facility_type_spec is not null
 
         group by facility_type_spec
                 ,npi_pcp
@@ -263,34 +268,15 @@ pcp_ranked_sdf = spark.sql(f"""
 
 """)
 
-pcp_ranked_sdf.filter(F.col('rank')<=10).count()
-
-# COMMAND ----------
-
-# filter to IDs in nearby facilities and compare count with ALL facilities
-
-pcp_top10_sdf = pcp_ranked_sdf.filter(F.col('rank')<=10) \
-                              .join(facilities_sdf.select('facility_id'), \
-                                   ['facility_id'], \
-                                   'inner')
-
-pcp_top10_sdf.count()
-
-# COMMAND ----------
-
-# get count of unique facilities by type retained (compare to map counts)
-
-sdf_frequency(pcp_top10_sdf.select('facility_id','facility_type').distinct(), ['facility_type'], order='cols')
-
 # COMMAND ----------
 
 # call create final output to join to base cols and add timestamp, filter to top 10, insert output for insert into table, and load to s3
 
 TBL_NAME = f"{DATABASE}.page5_top10_pcp"
 
-page5_top10_pcp = create_final_output_func(pcp_top10_sdf)
+page5_top10_pcp = create_final_output_func(pcp_ranked_sdf.filter(F.col('rank')<=10))
 
-insert_into_output_func(page5_top10_pcp.sort('facility_type','facility_id', 'rank'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_top10_pcp.sort('facility_type','facility_id', 'rank'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -334,6 +320,11 @@ TBL_NAME = f"{DATABASE}.page5_top10_postdis"
 
 top10_postdis = create_final_output_func(top10_postdis_sdf)
 
-insert_into_output_func(top10_postdis.sort('facility_id', 'rank'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(top10_postdis.sort('facility_id', 'rank'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
+
+# COMMAND ----------
+
+exit_notebook({'all_counts': COUNTS_DICT},
+              fail=False)
