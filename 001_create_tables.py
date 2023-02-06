@@ -23,7 +23,7 @@
 # MAGIC   - definitivehc.hospital_physician_compare_physicians
 # MAGIC   - npi_hco_mapping.npi_registry_addresses
 # MAGIC   - hcp_affiliations.physician_org_affiliations
-# MAGIC   - MxMart.F_MxClaim_v2
+# MAGIC   - MxMart.F_MxClaim
 # MAGIC   - MartDim.D_Organization
 # MAGIC   - MartDim.D_Profile
 # MAGIC   - MartDim.D_Provider
@@ -155,21 +155,22 @@ prim_aff.filter(F.col('rn')==1).createOrReplaceTempView('prim_aff_vw')
 # COMMAND ----------
 
 # take martdim.d_provider as source of truth for ALL individual NPIs, and join on other NPI-info including affiliations created above
+# for those with null/no specialty assignment, set specialty columns according to those with 'Other' (unknown) specialty
 
 hcps = spark.sql(f"""
 
     select cast(pv.NPI as int) as npi
-          ,pv.PrimarySpecialty
+          ,coalesce(pv.PrimarySpecialty, 'Other') as PrimarySpecialty
           ,pv.ProviderName
           
-          ,sp.specialty_cat
-          ,sp.specialty_type
-          ,sp.include_pie
+          ,coalesce(sp.specialty_cat, 'Other') as specialty_cat
+          ,coalesce(sp.specialty_type, 'None') as specialty_type
+          ,coalesce(sp.include_pie, 'N') as include_pie
           
           ,aff.defhc_id_primary
           ,aff.defhc_name_primary
           
-          , {affiliated_flag('aff.defhc_id_primary', DEFHC_ID)}
+          ,{affiliated_flag('aff.defhc_id_primary', DEFHC_ID)}
           
           ,cp.hq_zip_code as zip
           ,concat("{PHYS_LINK}", pv.npi) as npi_url
@@ -188,6 +189,10 @@ hcps = spark.sql(f"""
 """)
 
 hcps.createOrReplaceTempView('hcps_base_vw')
+
+# COMMAND ----------
+
+sdf_frequency(hcps, ['PrimarySpecialty', 'specialty_cat', 'specialty_type', 'include_pie'], order='cols', maxobs=200)
 
 # COMMAND ----------
 
@@ -627,6 +632,8 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"),
 
 # COMMAND ----------
 
+# inner join full claims to nearby HCO NPIs, and join to all HCP NPIs, keeping indicator for nearby HCP
+
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
            mc.DHCClaimId
@@ -652,7 +659,7 @@ df_mxclaims_master = spark.sql(f"""
         , prov.specialty_cat
         , prov.specialty_type
         , prov.include_pie
-        , prov.nearby
+        , prov.nearby as nearby_prov
                 
         , prov.defhc_id_primary as provider_primary_affiliation_id
         , {affiliated_flag('prov.defhc_id_primary', DEFHC_ID)}
@@ -661,20 +668,21 @@ df_mxclaims_master = spark.sql(f"""
         
         , prov.npi_url as rendering_npi_url
         
-    from   MxMart.F_MxClaim_v2 mc 
-           inner join
-           {TMP_DATABASE}.nearby_hcos_npi np
-           on np.NPI = ifnull(mc.FacilityNPI, mc.BillingProviderNPI)
+    from   MxMart.F_MxClaim mc 
+    
+           inner join {TMP_DATABASE}.nearby_hcos_npi np
+           on         np.NPI = ifnull(mc.FacilityNPI, mc.BillingProviderNPI)
            
            left join  hcps_full_vw prov
            on         mc.RenderingProviderNPI = prov.NPI
            
-           left   join {DATABASE}.pos_category_assign pos
-           on     mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
+           left join {DATABASE}.pos_category_assign pos
+           on        mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
            
     where  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE}' and
            mc.MxClaimYear >= 2016 and
            mc.MxClaimMonth between 1 and 12
+           
            
 """)
 
@@ -685,7 +693,7 @@ df_mxclaims_master = spark.sql(f"""
 TBL = f"{TMP_DATABASE}.{MX_CLMS_TBL}"
 
 pyspark_to_hive(df_mxclaims_master,
-               TBL)
+               TBL, overwrite_schema='true')
 
 COUNTS_DICT[TBL] = hive_tbl_count(TBL)
 
@@ -697,6 +705,10 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"),
               name = f"{TMP_DATABASE}.{MX_CLMS_TBL}",
               cols = ['DHCClaimId']
              )
+
+# COMMAND ----------
+
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"), ['nearby_prov'],with_pct=True)
 
 # COMMAND ----------
 
@@ -802,8 +814,8 @@ referrals1.createOrReplaceTempView('referrals1_vw')
 
 # COMMAND ----------
 
-# read in above view and again join TWICE to all HCOs to join on HCO-level info for both PCP and spec,
-# and subsetting to either BOTH providers nearby, or nearby PCP or spec facility
+# read in above view and again join TWICE to all HCOs to join on HCO-level info for both PCP and spec
+# subset to nearby spec (rendering) facilities
 
 referrals_fnl = spark.sql(f"""
 
@@ -835,11 +847,11 @@ referrals_fnl = spark.sql(f"""
             left   join hcos_npi_full_vw ref
             on     a.npi_fac_pcp = ref.npi
 
-            left   join hcos_npi_full_vw rend
+            inner   join hcos_npi_full_vw rend
             on     a.npi_fac_spec = rend.npi
         ) b
         
-    where (nearby_pcp=1 and nearby_spec=1) or nearby_fac_pcp=1 or nearby_fac_spec=1
+    where nearby_fac_spec=1
     
 """)
 
@@ -864,6 +876,12 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"),
               name = f"{TMP_DATABASE}.{PCP_REFS_TBL}",
               cols = ['rend_claim_id']
              )
+
+# COMMAND ----------
+
+# crosstab of indicators
+
+sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
 
 # COMMAND ----------
 

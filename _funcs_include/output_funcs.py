@@ -109,7 +109,8 @@ def insert_into_output(defhc_id, radius, start_date, end_date, sdf, table):
         table str: name of output table 
     
     returns:
-        none, has optional deletion before insertion, will print deleted/inserted dates
+        count of inserted records
+        has optional deletion before insertion, will print deleted/inserted dates
     
     """
     
@@ -156,6 +157,8 @@ def insert_into_output(defhc_id, radius, start_date, end_date, sdf, table):
        from {table}
        where {condition}   
        """).display()
+    
+    return hive_tbl_count(table, condition = f"where {condition}")
 
 # COMMAND ----------
 

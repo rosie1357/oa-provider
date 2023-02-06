@@ -22,7 +22,7 @@
 # MAGIC   - {TMP_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
 # MAGIC   - MartDim.D_Organization
-# MAGIC   - MxMart.F_MxClaim_v2
+# MAGIC   - MxMart.F_MxClaim
 # MAGIC   
 # MAGIC **Outputs** (inserted into):
 # MAGIC   - {DATABASE}.page1_toplevel_counts
@@ -56,6 +56,10 @@ TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
 
 INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network', 'defhc_name'])
 
+# create dictionary of counts to fill in for each table insert and return on pass
+
+COUNTS_DICT = {}
+
 # COMMAND ----------
 
 # confirm widgets match org table
@@ -63,14 +67,6 @@ INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.in
 test_widgets_match([DEFHC_ID, RADIUS], 
                    f"{TMP_DATABASE}.input_org_info", 
                    ['defhc_id', 'current_radius'] )
-
-# COMMAND ----------
-
-blah = [DEFHC_ID, RADIUS]
-
-values = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['defhc_id', 'current_radius'])
-
-all([x == y for x, y in zip(blah,values)])
 
 # COMMAND ----------
 
@@ -137,9 +133,9 @@ cnt_inpat_hosp = spark.sql(f"""
     inner join  MartDim.D_Organization b 
     on     a.defhc_id = b.DefinitiveId 
     
-    where  b.NPI in (select distinct FacilityNPI from MxMart.F_MxClaim_v2 where PlaceOfServiceCd = 21 
+    where  b.NPI in (select distinct FacilityNPI from MxMart.F_MxClaim where PlaceOfServiceCd = 21 
                      union distinct 
-                     select distinct BillingProviderNPI from MxMart.F_MxClaim_v2 where PlaceOfServiceCd = 21) and
+                     select distinct BillingProviderNPI from MxMart.F_MxClaim where PlaceOfServiceCd = 21) and
                    
            b.ActiveRecordInd = 'Y' and
            a.FirmTypeName = 'Hospital'
@@ -229,7 +225,7 @@ TBL_NAME = f"{DATABASE}.page1_toplevel_counts"
 
 page1_toplevel_counts = create_final_output_func(all_counts)
 
-insert_into_output_func(page1_toplevel_counts, TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_toplevel_counts, TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -293,7 +289,7 @@ TBL_NAME = f"{DATABASE}.page1_hosp_asc_pie"
 
 page1_hosp_asc_pie = create_final_output_func(hosp_asc_pie)
 
-insert_into_output_func(page1_hosp_asc_pie.sort('place_of_service', 'network_label'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_hosp_asc_pie.sort('place_of_service', 'network_label'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -332,7 +328,7 @@ page1_hosp_asc_bar = hosp_asc_bar.filter(F.col('defhc_id_collapsed').isNotNull()
 
 page1_hosp_asc_bar = create_final_output_func(page1_hosp_asc_bar)
 
-insert_into_output_func(page1_hosp_asc_bar.sort('place_of_service', 'facility_label'), f"{DATABASE}.page1_hosp_asc_bar")
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_hosp_asc_bar.sort('place_of_service', 'facility_label'), f"{DATABASE}.page1_hosp_asc_bar")
 
 upload_to_s3_func(TBL_NAME)
 
@@ -369,7 +365,7 @@ TBL_NAME = f"{DATABASE}.page1_aff_spec_loyalty"
 
 page1_aff_spec_loyalty = create_final_output_func(aff_specs)
 
-insert_into_output_func(page1_aff_spec_loyalty.sort('network_flag'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_aff_spec_loyalty.sort('network_flag'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -382,17 +378,12 @@ upload_to_s3_func(TBL_NAME)
 # COMMAND ----------
 
 # read in pcp referrals table and count total referrals by network_flag
-# subset to nearby providers and valid specialist facility
 
 pcp_referrals = spark.sql(f"""
     select network_flag_spec as network_flag
           ,count(*) as count
           
     from {TMP_DATABASE}.{PCP_REFS_TBL}
-    
-    where nearby_pcp=1 and 
-          nearby_spec=1 and
-          network_flag_spec is not null
           
     group by network_flag_spec
     order by network_flag_spec
@@ -406,7 +397,7 @@ TBL_NAME = f"{DATABASE}.page1_pcp_referrals"
 
 page1_pcp_referrals = create_final_output_func(pcp_referrals)
 
-insert_into_output_func(page1_pcp_referrals.sort('network_flag'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_pcp_referrals.sort('network_flag'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -453,6 +444,11 @@ TBL_NAME = f"{DATABASE}.page1_vis90_inpat_stay"
 
 page1_vis90_inpat_stay = create_final_output_func(patient_visits_after_inpatient)
 
-insert_into_output_func(page1_vis90_inpat_stay.sort('network_flag', 'place_of_service'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_vis90_inpat_stay.sort('network_flag', 'place_of_service'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
+
+# COMMAND ----------
+
+exit_notebook({'all_counts': COUNTS_DICT},
+              fail=False)

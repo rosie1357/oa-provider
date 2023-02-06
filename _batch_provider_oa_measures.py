@@ -27,6 +27,10 @@ RUN_ARGUMENTS = {v[0]: v[1] for k, v in RUN_VALUES.items()}
 
 RUN_SETUP, DATABASE = return_widget_values(RUN_VALUES, ['RUN_SETUP' , 'DATABASE'])
 
+# message to print on return of each notebook with output counts on pass
+
+COUNTS_MESSAGE = lambda d, k, t: f"All tables with {t} counts:" + '\n\t' + '\n\t'.join({f"{k}: {v:,d}" for k,v in d.get(k,{}).items()})
+
 # COMMAND ----------
 
 clear_database(GET_TMP_DATABASE(DATABASE))
@@ -50,33 +54,45 @@ if RUN_SETUP == 1:
 returns = ast.literal_eval(dbutils.notebook.run('001_create_tables', 0, arguments = RUN_ARGUMENTS))
 
 notebook_returns_passthrough(returns_dict = returns,
-                             pass_message = "All tables created:" + '\n\t' + ' ||  '.join({f"{k}: {v:,d}" for k,v in returns.get('all_counts',{}).items()})
+                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'total')
                             )
 
 # COMMAND ----------
 
 # run notebook for page 1 (dashboard) measure creation
-# TODO: add specific returns
 
-dbutils.notebook.run('002_dashboard', 0, arguments = RUN_ARGUMENTS)
+returns = ast.literal_eval(dbutils.notebook.run('002_dashboard', 0, arguments = RUN_ARGUMENTS))
+
+notebook_returns_passthrough(returns_dict = returns,
+                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'inserted')
+                            )
 
 # COMMAND ----------
 
 # run notebook for page 3 (specialists) measure creation
-# TODO: add specific returns
 
-dbutils.notebook.run('004_specialists', 0, arguments = RUN_ARGUMENTS)
+returns = ast.literal_eval(dbutils.notebook.run('004_specialists', 0, arguments = RUN_ARGUMENTS))
+
+notebook_returns_passthrough(returns_dict = returns,
+                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'inserted')
+                            )
 
 # COMMAND ----------
 
 # run notebook for page 4 (PCPs) measure creation
-# TODO: add specific returns
 
-dbutils.notebook.run('005_pcps', 0, arguments = RUN_ARGUMENTS)
+returns = ast.literal_eval(dbutils.notebook.run('005_pcps', 0, arguments = RUN_ARGUMENTS))
+
+notebook_returns_passthrough(returns_dict = returns,
+                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'inserted')
+                            )
 
 # COMMAND ----------
 
 # run notebook for page 5 (facilities) measure creation
-# TODO: add specific returns
 
-dbutils.notebook.run('006_facilities', 0, arguments = RUN_ARGUMENTS)
+returns = ast.literal_eval(dbutils.notebook.run('006_facilities', 0, arguments = RUN_ARGUMENTS))
+
+notebook_returns_passthrough(returns_dict = returns,
+                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'inserted')
+                            )
