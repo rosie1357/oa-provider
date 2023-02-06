@@ -22,9 +22,27 @@ PHYS_LINK = "https://www.defhc.com/physicians/"
 MX_CLMS_TBL = 'mxclaims_master'
 PCP_REFS_TBL = 'pcp_referrals'
 
+# list of ALL main tables created in 001_create_tables
+
+ALL_TABLES = ['input_org_info',
+              'nearby_hcos_id',
+              'nearby_hcps',
+              'nearby_hcos_npi',
+              MX_CLMS_TBL,
+              PCP_REFS_TBL
+             ]
+
 # COMMAND ----------
 
-GET_TMP_DATABASE = lambda x: f"{x}_tmp"
+GET_FAC_DATABASE = lambda db, id: f"{db}_{id}"
+
+# COMMAND ----------
+
+# set checkpoint dir
+
+CHECKPOINT_DIR = '/FileStore/checkpoints/provider'
+
+spark.sparkContext.setCheckpointDir(CHECKPOINT_DIR)
 
 # COMMAND ----------
 
