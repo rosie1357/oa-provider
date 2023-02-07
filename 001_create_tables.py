@@ -694,9 +694,9 @@ df_mxclaims_master = spark.sql(f"""
 
 TBL_NAME = f"{FAC_DATABASE}.{MX_CLMS_TBL}"
 
-nearby_hcps_out = create_final_output_func(df_mxclaims_master)
+mxclaims_out = create_final_output_func(df_mxclaims_master)
 
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcps_out, TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(mxclaims_out, TBL_NAME)
 
 # COMMAND ----------
 

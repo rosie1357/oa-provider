@@ -410,7 +410,7 @@ patient_visits_after_inpatient = spark.sql(f"""
 with t1 as (
 SELECT DISTINCT patientid,
        mxclaimdatekey
-  FROM 'mxmaster_claims_vw'
+  FROM mxclaims_master_vw
  WHERE PlaceOfServiceCd = 21
  AND defhc_id = {DEFHC_ID}
  ),
@@ -418,7 +418,7 @@ SELECT DISTINCT patientid,
  SELECT a.patientid,
         coalesce(a.pos_cat, 'Other') as place_of_service,
         a.network_flag
-  FROM  mxmaster_claims_vw a
+  FROM  mxclaims_master_vw a
   JOIN T1 
   ON t1.patientid = a.patientid 
 WHERE a.mxclaimdatekey <= date_add(t1.mxclaimdatekey, 90)
