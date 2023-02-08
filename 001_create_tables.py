@@ -13,7 +13,7 @@
 # MAGIC **Description:** Program to get metrics for input ID and create all base tables to save as tmp for later notebooks <br>
 # MAGIC <br>
 # MAGIC 
-# MAGIC **NOTE**: DATABASE and TMP_DATABASE params below are value extracted from database widget, value passed to TMP_DATABASE() lambda func param, tbl var names specified in params
+# MAGIC **NOTE**: DATABASE and FAC_DATABASE params below are value extracted from database widget, value passed to GET_FAC_DATABASE() lambda func param, tbl var names specified in params
 # MAGIC 
 # MAGIC **Inputs**:
 # MAGIC   - {DATABASE}.hcp_specialty_assignment
@@ -32,13 +32,13 @@
 # MAGIC   - {DATABASE}.explicit_referrals
 # MAGIC   - {DATABASE}.implicit_referrals_pcp_specialist
 # MAGIC   
-# MAGIC **Outputs**:
-# MAGIC   - {TMP_DATABASE}.input_org_info
-# MAGIC   - {TMP_DATABASE}.nearby_hcos
-# MAGIC   - {TMP_DATABASE}.nearby_hcps
-# MAGIC   - {TMP_DATABASE}.nearby_npis
-# MAGIC   - {TMP_DATABASE}.{MX_CLMS_TBL}
-# MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
+# MAGIC **Outputs** (inserted into):
+# MAGIC   - {FAC_DATABASE}.input_org_info
+# MAGIC   - {FAC_DATABASE}.nearby_hcos_id
+# MAGIC   - {FAC_DATABASE}.nearby_hcps
+# MAGIC   - {FAC_DATABASE}.nearby_hcos_npi
+# MAGIC   - {FAC_DATABASE}.{MX_CLMS_TBL}
+# MAGIC   - {FAC_DATABASE}.{PCP_REFS_TBL}
 
 # COMMAND ----------
 
@@ -47,6 +47,7 @@
 # COMMAND ----------
 
 from pyspark.sql.types import IntegerType
+from functools import partial
 
 # COMMAND ----------
 
@@ -56,11 +57,22 @@ RUN_VALUES = get_widgets()
 
 DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC'])
 
-TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
+FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
 
 # create dictionary of counts to fill in for each perm table and return on pass
 
 COUNTS_DICT = {}
+
+# COMMAND ----------
+
+# create base df to create partial for create_final_output function
+
+base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE, id_prefix='input_')
+create_final_output_func = partial(create_final_output, base_sdf)
+
+# create partial for insert_into_output function
+
+insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, must_exist=False, id_prefix='input_')
 
 # COMMAND ----------
 
@@ -77,8 +89,7 @@ COUNTS_DICT = {}
 # COMMAND ----------
 
 input_org_info = spark.sql(f"""
-    select hospital_id as defhc_id
-        , hospital_name as defhc_name
+    select hospital_name as defhc_name
         ,  network_id as input_network
         ,  firm_type
         ,  trim(concat(ifnull(hq_address, ''), ' ', ifnull(hq_address1, ''))) as address 
@@ -87,18 +98,18 @@ input_org_info = spark.sql(f"""
         ,  hq_zip_code as defhc_zip
         ,  hq_latitude as defhc_lat
         ,  hq_longitude as defhc_long
-        ,  {RADIUS} as current_radius
     from   definitivehc.hospital_all_companies 
     where  hospital_id = {DEFHC_ID}""")
 
-pyspark_to_hive(input_org_info,
-               f"{TMP_DATABASE}.input_org_info")
-
 # COMMAND ----------
 
-# print record
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
 
-hive_sample(f"{TMP_DATABASE}.input_org_info")
+TBL_NAME = f"{FAC_DATABASE}.input_org_info"
+
+input_org_info_out = create_final_output_func(input_org_info)
+
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(input_org_info_out, TBL_NAME)
 
 # COMMAND ----------
 
@@ -444,11 +455,11 @@ df_nearby_hcos_npi.createOrReplaceTempView('df_nearby_hcos_npi_vw')
 
 # join nearby_hcos to d_profile to get firm and facility type
 
-df_nearby_hcos_id = spark.sql(f"""
+df_nearby_hcos_id2 = spark.sql(f"""
     select no.*
-        ,  pf.ProfileName as defhc_name
-        ,  pf.FirmTypeName
-        ,  pf.FacilityTypeName
+         , pf.ProfileName as defhc_name
+         , pf.FirmTypeName
+         , pf.FacilityTypeName
         
         , {assign_fac_types(alias='pf')}
                     
@@ -461,23 +472,20 @@ df_nearby_hcos_id = spark.sql(f"""
 
 # COMMAND ----------
 
-# save to temp directory, put counts into dictionary, and print sample of records
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
 
-TBL = f"{TMP_DATABASE}.nearby_hcos_id"
+TBL_NAME = f"{FAC_DATABASE}.nearby_hcos_id"
 
-pyspark_to_hive(df_nearby_hcos_id,
-               TBL)
+nearby_hcos_id = create_final_output_func(df_nearby_hcos_id2)
 
-COUNTS_DICT[TBL] = hive_tbl_count(TBL)
-
-hive_sample(TBL)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcos_id, TBL_NAME)
 
 # COMMAND ----------
 
 # confirm unique by id for primary location
 
-test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcos_id").filter(F.col('primary')==1),
-              name = f"{TMP_DATABASE}.nearby_hcos_id",
+test_distinct(sdf = hive_to_df(TBL_NAME).filter(F.col('primary')==1),
+              name = TBL_NAME,
               cols = ['defhc_id']
              )
 
@@ -529,23 +537,20 @@ test_distinct(sdf = hcps_full,
 
 # COMMAND ----------
 
-# save to temp directory (filtering to nearby==1), put counts into dictionary, and print sample of records
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
 
-TBL = f"{TMP_DATABASE}.nearby_hcps"
+TBL_NAME = f"{FAC_DATABASE}.nearby_hcps"
 
-pyspark_to_hive(hcps_full.filter(F.col('nearby')==1).drop('nearby'),
-               TBL)
+nearby_hcps = create_final_output_func(hcps_full.filter(F.col('nearby')==1).drop('nearby'))
 
-COUNTS_DICT[TBL] = hive_tbl_count(TBL)
-
-hive_sample(TBL)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcps, TBL_NAME)
 
 # COMMAND ----------
 
 # check distinct on nearby only table
 
-test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcps"),
-              name = f"{TMP_DATABASE}.nearby_hcps",
+test_distinct(sdf = hive_to_df(TBL_NAME),
+              name = TBL_NAME,
               cols = ['npi']
              )
 
@@ -598,23 +603,20 @@ test_distinct(sdf = hcos_npi_full,
 
 # COMMAND ----------
 
-# save to temp directory (filtering to nearby==1), put counts into dictionary, and print sample of records
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
 
-TBL = f"{TMP_DATABASE}.nearby_hcos_npi"
+TBL_NAME = f"{FAC_DATABASE}.nearby_hcos_npi"
 
-pyspark_to_hive(hcos_npi_full.filter(F.col('nearby')==1).drop('nearby'),
-               TBL)
+nearby_hcps = create_final_output_func(hcos_npi_full.filter(F.col('nearby')==1).drop('nearby'))
 
-COUNTS_DICT[TBL] = hive_tbl_count(TBL)
-
-hive_sample(TBL)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcps, TBL_NAME)
 
 # COMMAND ----------
 
 # check distinct on nearby table
 
-test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"),
-              name = f"{TMP_DATABASE}.nearby_hcos_npi",
+test_distinct(sdf = hive_to_df(TBL_NAME),
+              name = TBL_NAME,
               cols = ['npi']
              )
 
@@ -632,7 +634,7 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"),
 
 # COMMAND ----------
 
-# inner join full claims to nearby HCO NPIs, and join to all HCP NPIs, keeping indicator for nearby HCP
+# inner join full claims to NEARBY HCO NPIs, and join to ALL HCP NPIs, keeping indicator for nearby HCP
 
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
@@ -670,7 +672,7 @@ df_mxclaims_master = spark.sql(f"""
         
     from   MxMart.F_MxClaim mc 
     
-           inner join {TMP_DATABASE}.nearby_hcos_npi np
+           inner join (select * from hcos_npi_full_vw where nearby=1) np
            on         np.NPI = ifnull(mc.FacilityNPI, mc.BillingProviderNPI)
            
            left join  hcps_full_vw prov
@@ -688,27 +690,24 @@ df_mxclaims_master = spark.sql(f"""
 
 # COMMAND ----------
 
-# save to temp directory, put counts into dictionary, and print sample of records
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
 
-TBL = f"{TMP_DATABASE}.{MX_CLMS_TBL}"
+TBL_NAME = f"{FAC_DATABASE}.{MX_CLMS_TBL}"
 
-pyspark_to_hive(df_mxclaims_master,
-               TBL, overwrite_schema='true')
+mxclaims_out = create_final_output_func(df_mxclaims_master)
 
-COUNTS_DICT[TBL] = hive_tbl_count(TBL)
-
-hive_sample(TBL)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(mxclaims_out, TBL_NAME)
 
 # COMMAND ----------
 
-test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"),
-              name = f"{TMP_DATABASE}.{MX_CLMS_TBL}",
+test_distinct(sdf = hive_to_df(TBL_NAME),
+              name = TBL_NAME,
               cols = ['DHCClaimId']
              )
 
 # COMMAND ----------
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"), ['nearby_prov'],with_pct=True)
+sdf_frequency(hive_to_df(TBL_NAME), ['nearby_prov'], with_pct=True)
 
 # COMMAND ----------
 
@@ -719,6 +718,7 @@ sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}"), ['nearby_prov'],with_
 # COMMAND ----------
 
 # create temp view of stacked referrals (explit and explicit), and join to POS crosswalk to get pos_cat
+# checkpoint to truncate lineage to avoid out of memory error
 
 referrals = spark.sql(f"""
         select a.*
@@ -756,7 +756,7 @@ referrals = spark.sql(f"""
         on     a.rend_pos = pos.PlaceOfServiceCd
 
         
-    """)
+    """).checkpoint()
 
 referrals.createOrReplaceTempView('referrals_vw')
 
@@ -808,7 +808,7 @@ referrals1 = spark.sql(f"""
    where ref.specialty_type = 'PCP' and 
          rend.specialty_type = 'Specialist'
            
-""")
+""").checkpoint()
 
 referrals1.createOrReplaceTempView('referrals1_vw')
 
@@ -857,23 +857,20 @@ referrals_fnl = spark.sql(f"""
 
 # COMMAND ----------
 
-# save to temp directory, put counts into dictionary, and print sample of records
+# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
 
-TBL = f"{TMP_DATABASE}.{PCP_REFS_TBL}"
+TBL_NAME = f"{FAC_DATABASE}.{PCP_REFS_TBL}"
 
-pyspark_to_hive(referrals_fnl,
-               TBL)
+referrals_out = create_final_output_func(referrals_fnl)
 
-COUNTS_DICT[TBL] = hive_tbl_count(TBL)
-
-hive_sample(TBL)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(referrals_out, TBL_NAME)
 
 # COMMAND ----------
 
 # confirm distinct by rend_claim_id
 
-test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"),
-              name = f"{TMP_DATABASE}.{PCP_REFS_TBL}",
+test_distinct(sdf = hive_to_df(TBL_NAME),
+              name = TBL_NAME,
               cols = ['rend_claim_id']
              )
 
@@ -881,7 +878,13 @@ test_distinct(sdf = hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"),
 
 # crosstab of indicators
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
+sdf_frequency(hive_to_df(TBL_NAME), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
+
+# COMMAND ----------
+
+# finally, clear all checkpointed tables
+
+rm_checkpoints(CHECKPOINT_DIR)
 
 # COMMAND ----------
 

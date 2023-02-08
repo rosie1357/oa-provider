@@ -12,20 +12,17 @@
 # MAGIC <br>
 # MAGIC **Description:** Program to create and save metrics for provider PCP page <br>
 # MAGIC <br>
-# MAGIC **NOTE**: DATABASE and TMP_DATABASE params below are value extracted from database widget, value passed to TMP_DATABASE() lambda func param, tbl var names specified in params
+# MAGIC **NOTE**: DATABASE and FAC_DATABASE params below are value extracted from database widget, value passed to GET_FAC_DATABASE() lambda func param, tbl var names specified in params
 # MAGIC 
 # MAGIC **Inputs**:
-# MAGIC   - {TMP_DATABASE}.input_org_info
-# MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
+# MAGIC   - {FAC_DATABASE}.input_org_info
+# MAGIC   - {FAC_DATABASE}.{PCP_REFS_TBL}
 # MAGIC   
 # MAGIC **Outputs** (inserted into):
 # MAGIC   - {DATABASE}.page4_loyalty_map_pcps
 # MAGIC   - {DATABASE}.page4_pcp_dist
 # MAGIC   - {DATABASE}.page4_patient_flow_pcps
 # MAGIC   - {DATABASE}.page4_net_leakage
-# MAGIC 
-# MAGIC *Outstanding questions:*
-# MAGIC 2. *confirm PCP Distribution should be count of providers*
 
 # COMMAND ----------
 
@@ -38,27 +35,21 @@ from functools import partial
 # COMMAND ----------
 
 # setup: 
-#  create/get widget values, assign temp database and network
+#  create/get widget values, assign fac database and network, create views
 
 RUN_VALUES = get_widgets()
 
 DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC'])
 
-TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
+FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
 
-INPUT_NETWORK = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network'])
+create_views(DEFHC_ID, RADIUS, START_DATE, END_DATE, FAC_DATABASE, ALL_TABLES, id_prefix='input_')
+
+INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df('input_org_info_vw'), ['input_network', 'defhc_name'])
 
 # create dictionary of counts to fill in for each table insert and return on pass
 
 COUNTS_DICT = {}
-
-# COMMAND ----------
-
-# confirm widgets match org table
-
-test_widgets_match([DEFHC_ID, RADIUS], 
-                   f"{TMP_DATABASE}.input_org_info", 
-                   ['defhc_id', 'current_radius'] )
 
 # COMMAND ----------
 
@@ -91,7 +82,7 @@ page4_loyalty_map_sdf = spark.sql(f"""
         ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) as count_in_network
         ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
         
-    from   {TMP_DATABASE}.{PCP_REFS_TBL}
+    from pcp_referrals_vw
           
     group  by specialty_cat_spec
         ,  zip_pcp 
@@ -125,7 +116,7 @@ page4_pcp_dist_sdf = spark.sql(f"""
         ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) as count_in_network
         ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
            
-    from   {TMP_DATABASE}.{PCP_REFS_TBL}
+    from   pcp_referrals_vw
          
    group   by npi_pcp
        ,   specialty_cat_spec
@@ -167,7 +158,7 @@ page4_patient_flow_pcps_sdf = spark.sql(f"""
         ,  network_flag_spec
         ,  count(*) as count
            
-    from   {TMP_DATABASE}.{PCP_REFS_TBL}
+    from   pcp_referrals_vw
           
     group by npi_pcp
         ,  name_pcp
@@ -207,7 +198,7 @@ page4_net_leakage_sdf = spark.sql(f"""
         ,  net_defhc_name_spec
         ,  count(*) as count
         
-    from   {TMP_DATABASE}.{PCP_REFS_TBL} 
+    from   pcp_referrals_vw
     where  net_defhc_id_pcp = {INPUT_NETWORK}
     and    net_defhc_id_spec != {INPUT_NETWORK}
     and    net_defhc_id_spec is not null

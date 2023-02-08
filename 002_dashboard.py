@@ -12,15 +12,15 @@
 # MAGIC <br>
 # MAGIC **Description:** Program to create and save metrics for provider dashboard <br>
 # MAGIC <br>
-# MAGIC **NOTE**: DATABASE and TMP_DATABASE params below are value extracted from database widget, value passed to TMP_DATABASE() lambda func param, tbl var names specified in params
+# MAGIC **NOTE**: DATABASE and FAC_DATABASE params below are value extracted from database widget, value passed to GET_FAC_DATABASE() lambda func param, tbl var names specified in params
 # MAGIC 
 # MAGIC **Inputs**:
-# MAGIC   - {TMP_DATABASE}.input_org_info
-# MAGIC   - {TMP_DATABASE}.nearby_hcos_id
-# MAGIC   - {TMP_DATABASE}.nearby_hcps
-# MAGIC   - {TMP_DATABASE}.nearby_hcos_npi
-# MAGIC   - {TMP_DATABASE}.{MX_CLMS_TBL}
-# MAGIC   - {TMP_DATABASE}.{PCP_REFS_TBL}
+# MAGIC   - {FAC_DATABASE}.input_org_info
+# MAGIC   - {FAC_DATABASE}.nearby_hcos_id
+# MAGIC   - {FAC_DATABASE}.nearby_hcps
+# MAGIC   - {FAC_DATABASE}.nearby_hcos_npi
+# MAGIC   - {FAC_DATABASE}.{MX_CLMS_TBL}
+# MAGIC   - {FAC_DATABASE}.{PCP_REFS_TBL}
 # MAGIC   - MartDim.D_Organization
 # MAGIC   - MxMart.F_MxClaim
 # MAGIC   
@@ -46,27 +46,21 @@ from functools import partial
 # COMMAND ----------
 
 # setup: 
-#  create/get widget values, assign temp database and network
+#  create/get widget values, assign fac database and network, create views
 
 RUN_VALUES = get_widgets()
 
 DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC'])
 
-TMP_DATABASE = GET_TMP_DATABASE(DATABASE)
+FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
 
-INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df(f"{TMP_DATABASE}.input_org_info"), ['input_network', 'defhc_name'])
+create_views(DEFHC_ID, RADIUS, START_DATE, END_DATE, FAC_DATABASE, ALL_TABLES, id_prefix='input_')
+
+INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df('input_org_info_vw'), ['input_network', 'defhc_name'])
 
 # create dictionary of counts to fill in for each table insert and return on pass
 
 COUNTS_DICT = {}
-
-# COMMAND ----------
-
-# confirm widgets match org table
-
-test_widgets_match([DEFHC_ID, RADIUS], 
-                   f"{TMP_DATABASE}.input_org_info", 
-                   ['defhc_id', 'current_radius'] )
 
 # COMMAND ----------
 
@@ -108,7 +102,7 @@ upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, 
 cnt_patient = spark.sql(f"""
 
     select count(distinct PatientId) as cnt_patients
-    from  {TMP_DATABASE}.{MX_CLMS_TBL}
+    from  mxclaims_master_vw
 """)
 
 cnt_patient.display()
@@ -128,7 +122,7 @@ cnt_patient.display()
 cnt_inpat_hosp = spark.sql(f"""
 
     select count(distinct a.defhc_id) as cnt_ip_hospitals
-    from   {TMP_DATABASE}.nearby_hcos_id a 
+    from   nearby_hcos_id_vw a 
     
     inner join  MartDim.D_Organization b 
     on     a.defhc_id = b.DefinitiveId 
@@ -157,7 +151,7 @@ hco_summary = spark.sql(f"""
     select FirmTypeName
          , count(distinct defhc_id) as cnt_providers
     
-    from   {TMP_DATABASE}.nearby_hcos_id
+    from   nearby_hcos_id_vw
     where FirmTypeName in ('Ambulatory Surgery Center', 'Physician Group')
     
     group by FirmTypeName
@@ -184,7 +178,7 @@ cnt_pg = hco_summary.filter(F.col('FirmTypeName')=='Physician Group').withColumn
 
 # get a count of npi records by pcp_flag to get counts for spec vs pcp
 
-nearby_hcps = hive_to_df(f"{TMP_DATABASE}.nearby_hcps")
+nearby_hcps = hive_to_df('nearby_hcps_vw')
 
 pcp_spec_summary = nearby_hcps.groupby('specialty_type') \
                               .agg(F.count(F.col('npi')).alias('cnt_providers')) \
@@ -243,7 +237,7 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
-hosp_asc_pie = get_top_values(intable = f"{TMP_DATABASE}.{MX_CLMS_TBL}",
+hosp_asc_pie = get_top_values(intable = 'mxclaims_master_vw',
                                defhc = 'net_defhc',
                                defhc_value = INPUT_NETWORK,
                                max_row = 4,
@@ -301,7 +295,7 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
-hosp_asc_bar = get_top_values(intable = f"{TMP_DATABASE}.{MX_CLMS_TBL}",
+hosp_asc_bar = get_top_values(intable = 'mxclaims_master_vw',
                                defhc = 'defhc',
                                defhc_value = DEFHC_ID,
                                max_row = 5,
@@ -348,7 +342,7 @@ aff_specs = spark.sql(f"""
     select network_flag
            ,count(*) as count
            
-    from {TMP_DATABASE}.{MX_CLMS_TBL}
+    from mxclaims_master_vw
     where specialty_type = 'Specialist' and
           affiliated_flag = 'Affiliated' and
           include_pie = 'Y'
@@ -383,7 +377,7 @@ pcp_referrals = spark.sql(f"""
     select network_flag_spec as network_flag
           ,count(*) as count
           
-    from {TMP_DATABASE}.{PCP_REFS_TBL}
+    from pcp_referrals_vw
           
     group by network_flag_spec
     order by network_flag_spec
@@ -416,7 +410,7 @@ patient_visits_after_inpatient = spark.sql(f"""
 with t1 as (
 SELECT DISTINCT patientid,
        mxclaimdatekey
-  FROM {TMP_DATABASE}.{MX_CLMS_TBL}
+  FROM mxclaims_master_vw
  WHERE PlaceOfServiceCd = 21
  AND defhc_id = {DEFHC_ID}
  ),
@@ -424,7 +418,7 @@ SELECT DISTINCT patientid,
  SELECT a.patientid,
         coalesce(a.pos_cat, 'Other') as place_of_service,
         a.network_flag
-  FROM  {TMP_DATABASE}.{MX_CLMS_TBL} a
+  FROM  mxclaims_master_vw a
   JOIN T1 
   ON t1.patientid = a.patientid 
 WHERE a.mxclaimdatekey <= date_add(t1.mxclaimdatekey, 90)

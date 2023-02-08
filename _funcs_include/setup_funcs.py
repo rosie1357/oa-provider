@@ -9,6 +9,14 @@ from operator import itemgetter
 
 # COMMAND ----------
 
+# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/fs_funcs
+
+# COMMAND ----------
+
+# MAGIC %run ./params
+
+# COMMAND ----------
+
 def get_widgets(include_widgets = list(range(1,7))):
     """
     Function get_widgets() to 
@@ -79,3 +87,43 @@ def return_widget_values(widget_dict, vars):
         returns += [widget_dict[var][1]]
         
     return tuple(returns)
+
+# COMMAND ----------
+
+def create_views(defhc_id, radius, start_date, end_date, database, tables, id_prefix=''):
+    """
+    Function create_views to create temp views for all given tables with subset
+        to given id/radius/dates
+        
+     params:
+        defhc_id int: input facility id
+        radius int: input radius
+        start_date str: input start_date
+        end_date str: input end_date
+        database str: name of database with all tables
+        tables list: list of all tables to make to views
+        id_prefix str: optional param to specify prefix on defhc_id (used for initial table creation, will be input_defhc_id), default=''   
+        
+    returns:
+        none, print of views created
+        
+    will error if count of any table == 0
+    
+    """
+    
+    for tbl in tables:
+        
+        spark.sql(f"""
+            create or replace temp view {tbl}_vw as
+            select * 
+            from {database}.{tbl}
+            where {id_prefix}defhc_id = {defhc_id} and 
+                  radius = {radius} and 
+                  start_date = '{start_date}' and 
+                  end_date = '{end_date}'
+        """)
+        cnt = hive_tbl_count(f"{tbl}_vw")
+        
+        assert cnt >0, f"ERROR: table {database}.{table} has 0 records for given id/radius/time frame"
+        
+        print(f"{tbl}_vw created with {cnt:,d} records")
