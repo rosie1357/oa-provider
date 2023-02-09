@@ -25,7 +25,7 @@ import ast
 RUN_VALUES = get_widgets(include_widgets = list(range(0,7)))
 RUN_ARGUMENTS = {v[0]: v[1] for k, v in RUN_VALUES.items()}
 
-RUN_SETUP, DATABASE = return_widget_values(RUN_VALUES, ['RUN_SETUP' , 'DATABASE'])
+RUN_SETUP, DATABASE, DEFHC_ID = return_widget_values(RUN_VALUES, ['RUN_SETUP' , 'DATABASE', 'DEFHC_ID'])
 
 # message to print on return of each notebook with output counts on pass
 
@@ -33,7 +33,11 @@ COUNTS_MESSAGE = lambda d, k, t: f"All tables with {t} counts:" + '\n\t' + '\n\t
 
 # COMMAND ----------
 
-clear_database(GET_TMP_DATABASE(DATABASE))
+# create database for given ID if not already exists
+
+FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
+
+spark.sql(f"create database if not exists {FAC_DATABASE}").display()
 
 # COMMAND ----------
 
