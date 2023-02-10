@@ -70,3 +70,15 @@ dups.filter(F.col('count')>1).createOrReplaceTempView('dups_vw')
 # MAGIC      on a.rend_claim_id = b.rend_claim_id
 # MAGIC      
 # MAGIC order by rend_claim_id
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 2. Network flags for 274382
+
+# COMMAND ----------
+
+# confirm network flags are correct for claims for 274382 (almost all out of network)
+
+
