@@ -925,7 +925,7 @@ COUNTS_DICT[TBL_NAME] = insert_into_output_func(referrals_out, TBL_NAME)
 
 # confirm distinct by rend_claim_id
 
-test_distinct(sdf = hive_to_df(TBL_NAME),
+test_distinct_func(sdf = hive_to_df(TBL_NAME),
               name = TBL_NAME,
               cols = ['rend_claim_id']
              )
