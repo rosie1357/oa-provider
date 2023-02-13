@@ -71,6 +71,10 @@ insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DA
 
 upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
 
+# create partial for test_distinct func
+
+test_distinct_func = partial(test_distinct, DEFHC_ID, RADIUS, START_DATE, END_DATE)
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -202,10 +206,11 @@ fac_ranked_sdf.sort('facility_type','rank').display()
 
 # confirm distinct by facility_id
 
-test_distinct(sdf = fac_ranked_sdf,
-              name = 'Facilities for Top 10 Chart',
-              cols = ['facility_id']
-             )
+test_distinct_func(sdf = fac_ranked_sdf,
+                   name = 'Facilities for Top 10 Chart',
+                   cols = ['facility_id'],
+                   to_subset = False
+                  )
 
 # COMMAND ----------
 
