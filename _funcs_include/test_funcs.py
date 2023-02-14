@@ -17,20 +17,33 @@
 
 # COMMAND ----------
 
-def test_distinct(sdf, name, cols):
+def test_distinct(defhc_id, radius, start_date, end_date, sdf, name, cols, to_subset=True):
     """
     Function test_distinct to call sdf_check_distinct() on given sdf and cols,
         and exit notebook with error if NOT distinct
     
     params:
+        defhc_id int: input facility id
+        radius int: input radius
+        start_date str: input start_date
+        end_date str: input end_date
         sdf: spark dataframe
+        name str: name of table for print statement
         cols list: list of cols to check distinct by
+        to_subset bool: optional param to specify if need to subset table to given id/radius/dates, default = False
         
    returns:
        if distinct, only prints message
        if not distinct, dbutils.notebook.exit() with dictionary of return params
         
     """
+    
+    if to_subset:
+        
+        sdf = sdf.filter(F.col('input_defhc_id')==defhc_id) \
+                 .filter(F.col('radius')==radius) \
+                 .filter(F.col('start_date')==start_date) \
+                 .filter(F.col('end_date')==end_date)
     
     distinct_return = sdf_check_distinct(sdf, cols)
     print(distinct_return)
