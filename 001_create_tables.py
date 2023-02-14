@@ -55,7 +55,7 @@ from functools import partial
 
 RUN_VALUES = get_widgets()
 
-DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC'])
+DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC, SUBSET_LT18 = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC', 'SUBSET_LT18'])
 
 FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
 
@@ -73,6 +73,10 @@ create_final_output_func = partial(create_final_output, base_sdf)
 # create partial for insert_into_output function
 
 insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, must_exist=False, id_prefix='input_')
+
+# create partial for test_distinct func
+
+test_distinct_func = partial(test_distinct, DEFHC_ID, RADIUS, START_DATE, END_DATE)
 
 # COMMAND ----------
 
@@ -203,16 +207,13 @@ hcps.createOrReplaceTempView('hcps_base_vw')
 
 # COMMAND ----------
 
-sdf_frequency(hcps, ['PrimarySpecialty', 'specialty_cat', 'specialty_type', 'include_pie'], order='cols', maxobs=200)
-
-# COMMAND ----------
-
 # confirm unique by npi
 
-test_distinct(sdf = hcps,
-              name = 'all_hcps',
-              cols = ['npi']
-             )
+test_distinct_func(sdf = hcps,
+                   name = 'all_hcps',
+                   cols = ['npi'],
+                   to_subset = False
+                  )
 
 # COMMAND ----------
 
@@ -280,10 +281,11 @@ hcos_npi.createOrReplaceTempView('hcos_npi_base_vw')
 
 # confirm unique by npi
 
-test_distinct(sdf = hcos_npi,
-              name = 'all_hcos_npi',
-              cols = ['npi']
-             )
+test_distinct_func(sdf = hcos_npi,
+                  name = 'all_hcos_npi',
+                  cols = ['npi'],
+                  to_subset = False
+                 )
 
 # COMMAND ----------
 
@@ -484,10 +486,10 @@ COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcos_id, TBL_NAME)
 
 # confirm unique by id for primary location
 
-test_distinct(sdf = hive_to_df(TBL_NAME).filter(F.col('primary')==1),
-              name = TBL_NAME,
-              cols = ['defhc_id']
-             )
+test_distinct_func(sdf = hive_to_df(TBL_NAME).filter(F.col('primary')==1),
+                  name = TBL_NAME,
+                  cols = ['defhc_id']
+                )
 
 # COMMAND ----------
 
@@ -530,10 +532,11 @@ hcps_full.createOrReplaceTempView('hcps_full_vw')
 
 # check distinct on full table
 
-test_distinct(sdf = hcps_full,
-              name = 'all_hcps_w_nearby',
-              cols = ['npi']
-             )
+test_distinct_func(sdf = hcps_full,
+                   name = 'all_hcps_w_nearby',
+                   cols = ['npi'],
+                   to_subset = False
+                   )
 
 # COMMAND ----------
 
@@ -549,10 +552,10 @@ COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcps, TBL_NAME)
 
 # check distinct on nearby only table
 
-test_distinct(sdf = hive_to_df(TBL_NAME),
-              name = TBL_NAME,
-              cols = ['npi']
-             )
+test_distinct_func(sdf = hive_to_df(TBL_NAME),
+                   name = TBL_NAME,
+                   cols = ['npi']
+                  )
 
 # COMMAND ----------
 
@@ -596,10 +599,11 @@ hcos_npi_full.createOrReplaceTempView('hcos_npi_full_vw')
 
 # check distinct on full table
 
-test_distinct(sdf = hcos_npi_full,
-              name = 'all_hcos_npi_w_nearby',
-              cols = ['npi']
-             )
+test_distinct_func(sdf = hcos_npi_full,
+                   name = 'all_hcos_npi_w_nearby',
+                   cols = ['npi'],
+                   to_subset = False
+                  )
 
 # COMMAND ----------
 
@@ -615,16 +619,25 @@ COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcps, TBL_NAME)
 
 # check distinct on nearby table
 
-test_distinct(sdf = hive_to_df(TBL_NAME),
-              name = TBL_NAME,
-              cols = ['npi']
-             )
+test_distinct_func(sdf = hive_to_df(TBL_NAME),
+                   name = TBL_NAME,
+                   cols = ['npi']
+                  )
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC 
 # MAGIC ### 3. Claims Tables
+
+# COMMAND ----------
+
+# create variable with create age statement to use for both master claims and referrals
+
+create_age_stmt = """ case when PatientBirthYearNum != 9999 then MxClaimYear - PatientBirthYearNum 
+                           else null
+                           end as patient_age
+                  """
 
 # COMMAND ----------
 
@@ -647,6 +660,7 @@ df_mxclaims_master = spark.sql(f"""
         ,  mc.RenderingProviderNPI 
         ,  mc.BillingProviderNPI 
         ,  mc.FacilityNPI 
+        ,  {create_age_stmt}
         
         ,  np.zip 
         ,  np.defhc_id 
@@ -690,22 +704,34 @@ df_mxclaims_master = spark.sql(f"""
 
 # COMMAND ----------
 
+# if SUBSET_LT18 == 1, subset to age between 0 and 17 (but examine ages before and after)
+
+if SUBSET_LT18 == 1:    
+    
+    df_mxclaims_master = df_mxclaims_master.filter(F.col('patient_age').between(0, 17))
+    
+    sdf_frequency(df_mxclaims_master, ['patient_age'], order='cols')
+
+# COMMAND ----------
+
 # call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
 
 TBL_NAME = f"{FAC_DATABASE}.{MX_CLMS_TBL}"
 
-mxclaims_out = create_final_output_func(df_mxclaims_master)
+mxclaims_out = create_final_output_func(df_mxclaims_master.drop('patient_age'))
 
 COUNTS_DICT[TBL_NAME] = insert_into_output_func(mxclaims_out, TBL_NAME)
 
 # COMMAND ----------
 
-test_distinct(sdf = hive_to_df(TBL_NAME),
-              name = TBL_NAME,
-              cols = ['DHCClaimId']
-             )
+test_distinct_func(sdf = hive_to_df(TBL_NAME),
+                   name = TBL_NAME,
+                   cols = ['DHCClaimId']
+                  )
 
 # COMMAND ----------
+
+# look at flag for nearby_prov (null means invalid rendering NPI)
 
 sdf_frequency(hive_to_df(TBL_NAME), ['nearby_prov'], with_pct=True)
 
@@ -718,18 +744,18 @@ sdf_frequency(hive_to_df(TBL_NAME), ['nearby_prov'], with_pct=True)
 # COMMAND ----------
 
 # create temp view of stacked referrals (explit and explicit), and join to POS crosswalk to get pos_cat
-# checkpoint to truncate lineage to avoid out of memory error
 
 referrals = spark.sql(f"""
         select a.*
              , pos.pos_cat as rend_pos_cat
-               
+             
        from (
         
             select rend_claim_id
                ,   ref_NPI 
                ,   rend_NPI 
                ,   rend_claim_date
+               ,   rend_claim_year
                ,   patient_id 
                ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_fac_npi
                ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_fac_npi
@@ -743,6 +769,7 @@ referrals = spark.sql(f"""
                ,   ref_NPI 
                ,   rend_NPI 
                ,   rend_claim_date
+               ,   rend_claim_year
                ,   patient_id 
                ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_fac_npi
                ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_fac_npi
@@ -754,9 +781,38 @@ referrals = spark.sql(f"""
         
         left   join {DATABASE}.pos_category_assign pos
         on     a.rend_pos = pos.PlaceOfServiceCd
-
         
-    """).checkpoint()
+        
+    """)
+
+# COMMAND ----------
+
+#if SUBSET_LT18 == 1, join to MxMart.F_MxClaim to get patient age and make subset
+
+if SUBSET_LT18 == 1:
+    
+    referrals.createOrReplaceTempView('referrals_vw')
+    
+    referrals = spark.sql(f"""
+        select a.*
+              , {create_age_stmt}
+        
+        from referrals_vw a
+        
+             left join  MxMart.F_MxClaim mc 
+        
+             on a.rend_claim_year = mc.MxClaimYear and 
+                a.rend_claim_id = mc.DHCClaimId
+    
+    """).filter(F.col('patient_age').between(0,17))
+    
+    sdf_frequency(referrals, ['patient_age'], order='cols')
+
+# COMMAND ----------
+
+# checkpoint to truncate lineage to avoid out of memory error
+
+referrals.checkpoint()
 
 referrals.createOrReplaceTempView('referrals_vw')
 
@@ -869,7 +925,7 @@ COUNTS_DICT[TBL_NAME] = insert_into_output_func(referrals_out, TBL_NAME)
 
 # confirm distinct by rend_claim_id
 
-test_distinct(sdf = hive_to_df(TBL_NAME),
+test_distinct_func(sdf = hive_to_df(TBL_NAME),
               name = TBL_NAME,
               cols = ['rend_claim_id']
              )

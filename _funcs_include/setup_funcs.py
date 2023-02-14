@@ -17,14 +17,14 @@ from operator import itemgetter
 
 # COMMAND ----------
 
-def get_widgets(include_widgets = list(range(1,7))):
+def get_widgets(include_widgets = list(range(1,8))):
     """
     Function get_widgets() to 
         a) create included widgets if not already exist on notebook (first time running)
         b) get and return a dictionary of values for all included widgets
         
     params:
-        include_widgets list: optional list of integers to specify widgets by number to request which to include, default = 1-6
+        include_widgets list: optional list of integers to specify widgets by number to request which to include, default = 1-7
         
     returns:
         dictionary with included entries, with key = var name, value = tuple (widget name, CURRENT widget value (will only use defaults first time through))
@@ -65,6 +65,11 @@ def get_widgets(include_widgets = list(range(1,7))):
                    6: {'name': "(6) Run QC Checks",
                        'default': "0",
                        'var': 'RUN_QC',
+                       'clean_func': lambda x: int(x)},
+                   
+                   7: {'name': "(7) Under 18 Subset",
+                       'default': "0",
+                       'var': 'SUBSET_LT18',
                        'clean_func': lambda x: int(x)}
                   }
     

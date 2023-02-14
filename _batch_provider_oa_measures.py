@@ -22,7 +22,7 @@ import ast
 
 # COMMAND ----------
 
-RUN_VALUES = get_widgets(include_widgets = list(range(0,7)))
+RUN_VALUES = get_widgets(include_widgets = list(range(0,8)))
 RUN_ARGUMENTS = {v[0]: v[1] for k, v in RUN_VALUES.items()}
 
 RUN_SETUP, DATABASE, DEFHC_ID = return_widget_values(RUN_VALUES, ['RUN_SETUP' , 'DATABASE', 'DEFHC_ID'])

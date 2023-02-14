@@ -70,3 +70,35 @@ dups.filter(F.col('count')>1).createOrReplaceTempView('dups_vw')
 # MAGIC      on a.rend_claim_id = b.rend_claim_id
 # MAGIC      
 # MAGIC order by rend_claim_id
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 2. Network flags for 274382
+
+# COMMAND ----------
+
+# confirm network flags are correct for claims for 274382 (almost all out of network)
+
+DB = 'ds_provider_274382'
+
+spark.sql(f"select * from {DB}.input_org_info where start_date='2021-10-01'").display()
+
+# COMMAND ----------
+
+# look at all nearby fac NPIs to see any that are considered in-network
+
+nearby_facs = spark.sql(f"select * from {DB}.nearby_hcos_npi where start_date='2021-10-01'")
+
+sdf_frequency(nearby_facs, ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', maxobs=100)
+
+# COMMAND ----------
+
+# print all records for in-network
+
+nearby_facs.filter(F.col('network_flag')=='In-Network').display()
+
+# COMMAND ----------
+
+
