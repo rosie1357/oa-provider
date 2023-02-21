@@ -147,7 +147,7 @@ print(f"Input firm type: {FIRM_TYPE}")
 
 # COMMAND ----------
 
-# create temp view with top given firm type affiliation for every provider
+# create temp view with
 
 prim_aff = spark.sql(f"""
     select physician_npi
@@ -704,7 +704,7 @@ df_mxclaims_master = spark.sql(f"""
 
 # COMMAND ----------
 
-# if SUBSET_LT18 == 1, subset to age between 0 and 17 (but examine ages before and after)
+# if SUBSET_LT18 == 1, subset to age between 0 and 17
 
 if SUBSET_LT18 == 1:    
     
@@ -748,6 +748,7 @@ sdf_frequency(hive_to_df(TBL_NAME), ['nearby_prov'], with_pct=True)
 referrals = spark.sql(f"""
         select a.*
              , pos.pos_cat as rend_pos_cat
+             , {create_age_stmt}
              
        from (
         
@@ -755,11 +756,12 @@ referrals = spark.sql(f"""
                ,   ref_NPI 
                ,   rend_NPI 
                ,   rend_claim_date
-               ,   rend_claim_year
+               ,   rend_claim_year as MxClaimYear
                ,   patient_id 
                ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_fac_npi
                ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_fac_npi
                ,   rend_pos
+               ,   patient_birth_year as PatientBirthYearNum
             from   {DATABASE}.explicit_referrals 
             where  rend_claim_date between '{START_DATE}' and '{END_DATE}'
 
@@ -769,11 +771,12 @@ referrals = spark.sql(f"""
                ,   ref_NPI 
                ,   rend_NPI 
                ,   rend_claim_date
-               ,   rend_claim_year
+               ,   rend_claim_year as MxClaimYear
                ,   patient_id 
                ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_fac_npi
                ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_fac_npi
                ,   rend_pos
+               ,   patient_birth_year as PatientBirthYearNum
             from   {DATABASE}.implicit_referrals_pcp_specialist
             where  rend_claim_date between '{START_DATE}' and '{END_DATE}'
         
@@ -787,26 +790,11 @@ referrals = spark.sql(f"""
 
 # COMMAND ----------
 
-#if SUBSET_LT18 == 1, join to MxMart.F_MxClaim to get patient age and make subset
+# if SUBSET_LT18 == 1, subset to age between 0 and 17
 
-if SUBSET_LT18 == 1:
+if SUBSET_LT18 == 1:    
     
-    referrals.createOrReplaceTempView('referrals_vw')
-    
-    referrals = spark.sql(f"""
-        select a.*
-              , {create_age_stmt}
-        
-        from referrals_vw a
-        
-             left join  MxMart.F_MxClaim mc 
-        
-             on a.rend_claim_year = mc.MxClaimYear and 
-                a.rend_claim_id = mc.DHCClaimId
-    
-    """).filter(F.col('patient_age').between(0,17))
-    
-    sdf_frequency(referrals, ['patient_age'], order='cols')
+    referrals = referrals.filter(F.col('patient_age').between(0, 17))
 
 # COMMAND ----------
 
