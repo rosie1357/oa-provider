@@ -63,6 +63,12 @@ FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
 
 COUNTS_DICT = {}
 
+# to pull in claims for 90-days post-inpatient stay, create END_DATE + 90 days
+
+END_DATE_P90 = add_time(END_DATE, add_days=90)
+
+print(f"START_DATE = {START_DATE}, END_DATE = {END_DATE}, END_DATE + 90 DAYS = {END_DATE_P90}")
+
 # COMMAND ----------
 
 # create base df to create partial for create_final_output function
@@ -94,7 +100,7 @@ test_distinct_func = partial(test_distinct, DEFHC_ID, RADIUS, START_DATE, END_DA
 
 input_org_info = spark.sql(f"""
     select hospital_name as defhc_name
-        ,  network_id as input_network
+        ,  coalesce(network_parent_id, network_id) as input_network
         ,  firm_type
         ,  trim(concat(ifnull(hq_address, ''), ' ', ifnull(hq_address1, ''))) as address 
         ,  hq_city as defhc_city
@@ -147,7 +153,7 @@ print(f"Input firm type: {FIRM_TYPE}")
 
 # COMMAND ----------
 
-# create temp view with
+# create temp view with top given firm type affiliation for every provider
 
 prim_aff = spark.sql(f"""
     select physician_npi
@@ -648,11 +654,15 @@ create_age_stmt = """ case when PatientBirthYearNum != 9999 then MxClaimYear - P
 # COMMAND ----------
 
 # inner join full claims to NEARBY HCO NPIs, and join to ALL HCP NPIs, keeping indicator for nearby HCP
+# subset claims to given time period PLUS 90 days: the final perm table will only be given time frame,
+# but the plus 90 days will be used to create inpatient stays in 3C
 
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
            mc.DHCClaimId
         ,  mc.ClaimTypeCd
+        ,  mc.MxClaimYear
+        ,  mc.MxClaimMonth
         ,  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') as mxclaimdatekey
         ,  mc.PatientId 
         ,  mc.PlaceOfServiceCd
@@ -695,7 +705,7 @@ df_mxclaims_master = spark.sql(f"""
            left join {DATABASE}.pos_category_assign pos
            on        mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
            
-    where  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE}' and
+    where  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE_P90}' and
            mc.MxClaimYear >= 2016 and
            mc.MxClaimMonth between 1 and 12
            
@@ -704,13 +714,20 @@ df_mxclaims_master = spark.sql(f"""
 
 # COMMAND ----------
 
-# if SUBSET_LT18 == 1, subset to age between 0 and 17
+# if SUBSET_LT18 == 1, subset to age between 0 and 17, confirm correct ages kept
 
 if SUBSET_LT18 == 1:    
     
     df_mxclaims_master = df_mxclaims_master.filter(F.col('patient_age').between(0, 17))
     
-    sdf_frequency(df_mxclaims_master, ['patient_age'], order='cols')
+    df_mxclaims_master.select('patient_age').summary("min", "max").display()
+
+# COMMAND ----------
+
+# subset perm claims table to given time frame, drop patient_age (not needed anymore)
+
+df_mxclaims_master_fnl = df_mxclaims_master.filter(F.col('mxclaimdatekey').between(START_DATE, END_DATE)) \
+                                           .drop('patient_age')
 
 # COMMAND ----------
 
@@ -718,7 +735,7 @@ if SUBSET_LT18 == 1:
 
 TBL_NAME = f"{FAC_DATABASE}.{MX_CLMS_TBL}"
 
-mxclaims_out = create_final_output_func(df_mxclaims_master.drop('patient_age'))
+mxclaims_out = create_final_output_func(df_mxclaims_master_fnl)
 
 COUNTS_DICT[TBL_NAME] = insert_into_output_func(mxclaims_out, TBL_NAME)
 
@@ -923,6 +940,134 @@ test_distinct_func(sdf = hive_to_df(TBL_NAME),
 # crosstab of indicators
 
 sdf_frequency(hive_to_df(TBL_NAME), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 3C. Inpatient Stays
+
+# COMMAND ----------
+
+# create view for final claims created above to use to create stays
+
+create_views(DEFHC_ID, RADIUS, START_DATE, END_DATE, FAC_DATABASE, [MX_CLMS_TBL], id_prefix='input_')
+
+# COMMAND ----------
+
+# use final master claims table (subset to given time frame) to identify all inpatient claims, 
+# joining back to service lines to get min/max of service dates
+# aggregate to patient/claim date/facility/provider-level, getting min and max of dates
+
+inpat_claims_sdf = spark.sql(f"""
+
+    select *
+             -- create claim start and end dates based on EARLIEST and LATEST of all three combos
+             
+           , least(claim_date, min_service_to, min_service_from) as claim_start_date
+           , greatest(claim_date, max_service_to, max_service_from) as claim_end_date
+    
+    from (
+        select PatientId
+            ,  mxclaimdatekey as claim_date
+            ,  defhc_id
+            ,  net_defhc_id
+            ,  network_flag
+
+            ,  min_service_from
+            ,  max_service_from
+            
+            ,  min_service_to
+            ,  max_service_to
+
+        from   mxclaims_master_vw a 
+        
+               inner  join 
+               
+                (select MxClaimYear
+                       ,MxClaimMonth
+                       ,DHCClaimId
+                       ,to_date(cast(min(ServiceFromDateKey) as string), 'yyyyMMdd') as min_service_from
+                       ,to_date(cast(max(ServiceFromDateKey) as string), 'yyyyMMdd') as max_service_from
+                       
+                       ,to_date(cast(min(ServiceToDateKey) as string), 'yyyyMMdd') as min_service_to
+                       ,to_date(cast(max(ServiceToDateKey) as string), 'yyyyMMdd') as max_service_to
+
+                 from mxmart.f_mxservice
+                 group by MxClaimYear
+                         ,MxClaimMonth
+                         ,DHCClaimId
+                 ) b
+                 
+        on     a.MxClaimYear = b.MxClaimYear and 
+               a.MxClaimMonth = b.MxClaimMonth and 
+               a.DHCClaimId = b.DHCClaimId 
+
+        where  a.pos_cat = 'Hospital Inpatient' and
+               a.facility_type = 'Hospital' and 
+               a.patientid is not null
+    ) c
+
+""")
+
+# COMMAND ----------
+
+# print sample of records with different start/end dates
+
+inpat_claims_sdf.filter(F.col('claim_start_date') != F.col('claim_end_date')).sort('patientid', 'claim_start_date', 'claim_end_date').display()
+
+# COMMAND ----------
+
+NEW_STAY_DAYS_CUTOFF = 7
+
+# COMMAND ----------
+
+# create windows to use below to identify new stays
+
+lag_window = sdf_create_window(partition=['patientid', 'defhc_id'],
+                               order = ['claim_start_date', 'claim_end_date'])
+                              
+sum_window = sdf_create_window(partition=['patientid', 'defhc_id'],
+                               order = ['claim_start_date', 'claim_end_date'],
+                               rows_between = 'unboundedPreceding')
+
+stay_window = sdf_create_window(partition = ['patientid', 'defhc_id', 'stay_number'],
+                               rows_between = 'unboundedBoth')
+
+pat_window = sdf_create_window(partition = ['patientid', 'defhc_id'],
+                              rows_between = 'unboundedBoth')
+
+# COMMAND ----------
+
+# lag dates from prior record and create an indicator for when to create a second stay (at least NEW_STAY_DAYS_CUTOFF between end and start of next)
+# create stay start and end dates as min/max of start/end dates of individual claims for same stay_number (stay 1 begins at a value of 0)
+# count total number of stays per patient/facility
+
+inpat_claims_sdf2 = inpat_claims_sdf.withColumn('lag_end_date', F.lag('claim_end_date').over(lag_window)) \
+                                    .withColumn('new_stay', F.when(F.datediff('claim_start_date', 'lag_end_date') > NEW_STAY_DAYS_CUTOFF, 1).otherwise(0)) \
+                                    .withColumn('stay_number', F.sum('new_stay').over(sum_window)) \
+                                    .withColumn('stay_start_date', F.min('claim_start_date').over(stay_window)) \
+                                    .withColumn('stay_end_date', F.max('claim_end_date').over(stay_window)) \
+                                    .withColumn('number_stays', F.lit(1) + F.max('stay_number').over(pat_window)) \
+                                    .drop('claim_date', 'min_service_from', 'max_service_from', 'min_service_to', 'max_service_to')
+
+# COMMAND ----------
+
+inpat_claims_sdf2.filter(F.col('patientid')=='406832782').sort('claim_start_date', 'claim_end_date').display()
+
+# COMMAND ----------
+
+inpat_claims_sdf2.filter(F.col('number_stays')>3).sort('patientid', 'claim_start_date', 'claim_end_date').limit(500).display()
+
+# COMMAND ----------
+
+# get distinct of stay-level columns to create stays 
+
+inpat_stays_sdf = inpat_claims_sdf2.select('patientid', 'defhc_id', 'net_defhc_id', 'network_flag', 'stay_number', 'stay_start_date', 'stay_end_date').distinct()
+
+# COMMAND ----------
+
+inpat_stays_sdf.count()
 
 # COMMAND ----------
 
