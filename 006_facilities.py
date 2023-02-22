@@ -19,6 +19,7 @@
 # MAGIC   - {FAC_DATABASE}.nearby_hcos_id
 # MAGIC   - {FAC_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {FAC_DATABASE}.{PCP_REFS_TBL}
+# MAGIC   - {FAC_DATABASE}.inpat90_facilities
 # MAGIC   
 # MAGIC **Outputs** (inserted into):
 # MAGIC   - {DATABASE}.page5_facility_map

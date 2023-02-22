@@ -21,6 +21,7 @@
 # MAGIC   - {FAC_DATABASE}.nearby_hcos_npi
 # MAGIC   - {FAC_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {FAC_DATABASE}.{PCP_REFS_TBL}
+# MAGIC   - {FAC_DATABASE}.inpat90_dashboard
 # MAGIC   - MartDim.D_Organization
 # MAGIC   - MxMart.F_MxClaim
 # MAGIC   
