@@ -242,7 +242,7 @@ hosp_asc_pie = get_top_values(intable = 'mxclaims_master_vw',
                                defhc_value = INPUT_NETWORK,
                                max_row = 4,
                                strat_cols=['pos_cat'],
-                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgical Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
+                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 
 hosp_asc_pie.createOrReplaceTempView('hosp_asc_pie_vw')
@@ -300,7 +300,7 @@ hosp_asc_bar = get_top_values(intable = 'mxclaims_master_vw',
                                defhc_value = DEFHC_ID,
                                max_row = 5,
                                strat_cols=['pos_cat'],
-                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgical Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
+                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 
 # COMMAND ----------
