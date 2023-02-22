@@ -288,29 +288,22 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
-# until we decide how to calculate inpatient stays, will just create dummy records for this,
-# with 10 facilities and counts for each Hospital in facilities_sdf
+# read in discharge location counts, subset to top 10 per ID
 
-numbers = list(range(1, 11))
-
-fac_samp_dict = {
-    'discharge_facility_id': numbers,
-    'discharge_facility_name': [f"Dummy Facility {x}" for x in numbers],
-    'count': [x*10 for x in numbers[::-1]],
-    'rank': numbers
-}
-
-dummy_sdf = spark.createDataFrame(pd.DataFrame(fac_samp_dict))
-
-dummy_sdf.display()
-
-# COMMAND ----------
-
-top10_postdis_sdf = facilities_sdf.filter(F.col('facility_type')=='Hospital') \
-                                  .select('facility_id') \
-                                  .join(dummy_sdf)
-
-top10_postdis_sdf.sort('facility_id','rank').display()
+fac_discharge_sdf = spark.sql("""
+    
+    select facility_id
+           ,defhc_id as discharge_facility_id
+           ,defhc_name as discharge_facility_name
+           ,count
+           ,row_number() over (partition by facility_id
+                                order by count desc)
+                          as rank
+    
+    from inpat90_facilities_vw
+    where defhc_id is not null
+    
+""")
 
 # COMMAND ----------
 
@@ -318,9 +311,9 @@ top10_postdis_sdf.sort('facility_id','rank').display()
 
 TBL_NAME = f"{DATABASE}.page5_top10_postdis"
 
-top10_postdis = create_final_output_func(top10_postdis_sdf)
+page5_top10_postdis = create_final_output_func(fac_discharge_sdf.filter(F.col('rank')<=10))
 
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(top10_postdis.sort('facility_id', 'rank'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_top10_postdis.sort('facility_id', 'rank'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
