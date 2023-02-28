@@ -172,7 +172,7 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
            ,name_spec
            ,npi_url_spec
            ,specialty_cat_spec
-           ,affiliation_2cat
+           ,affiliation_spec
            ,affiliation_2cat_spec
            ,network_flag_spec
            ,count(*) as count
@@ -186,7 +186,7 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
            ,name_spec
            ,npi_url_spec
            ,specialty_cat_spec
-           ,affiliation_2cat_spec
+           ,affiliation_spec
            ,affiliation_2cat_spec
            ,network_flag_spec
 
