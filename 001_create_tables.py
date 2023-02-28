@@ -236,7 +236,7 @@ hcp_affs = spark.sql(f"""
            ,max(case when rn=1 then hospital_name else null end) as defhc_name_primary
            
            ,max(case when rn=1 and defhc_id = {DEFHC_ID} then 1 else 0 end) as primary_affiliation
-           ,max(case when rn>1 and defhc_id = {DEFHC_ID} then 1 else 0 end) as any_affiliation
+           ,max(case when rn>1 and defhc_id = {DEFHC_ID} then 1 else 0 end) as secondary_affiliation
            
     from (
     
@@ -268,7 +268,7 @@ hcp_affs.createOrReplaceTempView('hcp_affs_vw')
  
  two category affiliation:
    1. Primary affiliation to given facility
-   2. ANY affiliation to given facility
+   2. Secondary affiliation to given facility
 
 four category affiliation:
    1. Primary affiliation to given facility
@@ -284,7 +284,7 @@ hcp_affs_net = spark.sql("""
     select a.*
         
           ,case when primary_affiliation=1 then '1. Primary'
-                when any_affiliation=1 then '2. Any'
+                when secondary_affiliation=1 then '2. Secondary'
                 else null
                 end as affiliation_2cat
 
@@ -306,7 +306,7 @@ hcp_affs_net.createOrReplaceTempView('hcp_affs_net_vw')
 
 # COMMAND ----------
 
-sdf_frequency(hcp_affs_net, ['primary_affiliation', 'any_affiliation', 'affiliation_2cat', 'affiliation_4cat'], order='cols')
+sdf_frequency(hcp_affs_net, ['primary_affiliation', 'secondary_affiliation', 'affiliation_2cat', 'affiliation_4cat'], order='cols')
 
 # COMMAND ----------
 
@@ -314,7 +314,7 @@ hcp_affs_net.filter(F.col('affiliation_2cat')=='1. Primary').limit(50).display()
 
 # COMMAND ----------
 
-hcp_affs_net.filter(F.col('affiliation_2cat')=='2. Any').limit(50).display()
+hcp_affs_net.filter(F.col('affiliation_2cat')=='2. Secondary').limit(50).display()
 
 # COMMAND ----------
 
@@ -1356,7 +1356,7 @@ sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_id"), ['FirmTypeName'])
 
 # HCP: look at creation of affiliated and PCP flags
 
-sdf_frequency(hcp_affs_net, ['primary_affiliation', 'any_affiliation', 'affiliation_2cat', 'affiliation_4cat'], order='cols')
+sdf_frequency(hcp_affs_net, ['primary_affiliation', 'secondary_affiliation', 'affiliation_2cat', 'affiliation_4cat'], order='cols')
 
 sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['specialty_type', 'PrimarySpecialty'], order='cols', maxobs=100)
 
