@@ -112,7 +112,7 @@ upload_to_s3_func(TBL_NAME)
 page4_pcp_dist_sdf = spark.sql(f"""
     select npi_pcp
         ,  specialty_cat_spec
-        ,  affiliated_flag_pcp
+        ,  affiliation_4cat_pcp
         ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) as count_in_network
         ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
            
@@ -120,7 +120,7 @@ page4_pcp_dist_sdf = spark.sql(f"""
          
    group   by npi_pcp
        ,   specialty_cat_spec
-       ,   affiliated_flag_pcp
+       ,   affiliation_4cat_pcp
          
 """)
 
