@@ -82,7 +82,7 @@ page3_top_sdf = spark.sql(f"""
            ,ProviderName as name
            ,rendering_npi_url as npi_url
            ,specialty_cat
-           ,affiliated_flag
+           ,affiliation_2cat
            ,sum(case when network_flag = 'In-Network' then 1 else 0 end) as count_in_network
            ,sum(case when network_flag = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
            
@@ -92,7 +92,7 @@ page3_top_sdf = spark.sql(f"""
            ,ProviderName
            ,rendering_npi_url
            ,specialty_cat
-           ,affiliated_flag
+           ,affiliation_2cat
 """)
 
 # COMMAND ----------
@@ -103,7 +103,7 @@ TBL_NAME = f"{DATABASE}.page3_top_panel_specialists"
 
 page3_top_panel_specialists = create_final_output_func(page3_top_sdf)
 
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliated_flag'), TBL_NAME)
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliation_2cat'), TBL_NAME)
 
 upload_to_s3_func(TBL_NAME)
 
@@ -121,7 +121,7 @@ page3_shares_sdf = spark.sql(f"""
     select net_defhc_id
            ,net_defhc_name
            ,specialty_cat
-           ,affiliated_flag
+           ,affiliation_2cat
            ,pos_cat as place_of_service
            ,network_flag
            ,count(*) as count
@@ -135,7 +135,7 @@ page3_shares_sdf = spark.sql(f"""
    group by net_defhc_id
            ,net_defhc_name
            ,specialty_cat
-           ,affiliated_flag
+           ,affiliation_2cat
            ,pos_cat
            ,network_flag
          
@@ -172,8 +172,8 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
            ,name_spec
            ,npi_url_spec
            ,specialty_cat_spec
-           ,affiliation_spec
-           ,affiliated_flag_spec
+           ,affiliation_2cat
+           ,affiliation_2cat_spec
            ,network_flag_spec
            ,count(*) as count
            
@@ -186,8 +186,8 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
            ,name_spec
            ,npi_url_spec
            ,specialty_cat_spec
-           ,affiliation_spec
-           ,affiliated_flag_spec
+           ,affiliation_2cat_spec
+           ,affiliation_2cat_spec
            ,network_flag_spec
 
 """)
