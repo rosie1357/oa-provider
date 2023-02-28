@@ -69,24 +69,6 @@ def network_flag(network_col, network_value, suffix=''):
 
 # COMMAND ----------
 
-def affiliated_flag(affiliation_col, affiliation_value, suffix=''):
-    """
-    Function affiliated_flag() to create col affiliated_flag based on affiliation ID column and literal value
-    params:
-        affiliation_col str: name of column with affiliation (defhc_id) values to match against
-        affiliation_value int: value to match against to affiliated/competitor/independent
-        suffix str: optional param to add suffix to affiliated_flag (if creating >1 per table, eg)
-  
-    """
-    
-    return f"""case when {affiliation_col} = {affiliation_value} then 'Affiliated'
-               when {affiliation_col} is not null then 'Competitor'
-               else 'Independent'
-               end as affiliated_flag{suffix}
-         """
-
-# COMMAND ----------
-
 def assign_fac_types(alias, current_col='FirmTypeName', new_col='facility_type'):
     """
     Function assign_fac_types to return sql text to create facility_type col from input firmtype
