@@ -149,83 +149,7 @@ print(f"Input firm type: {FIRM_TYPE}")
 
 # MAGIC %md
 # MAGIC 
-# MAGIC #### 1B. Create temp view of all HCPs with IDs/affiliations/specialty
-
-# COMMAND ----------
-
-# create temp view with top given firm type affiliation for every provider
-
-prim_aff = spark.sql(f"""
-    select physician_npi
-           ,defhc_id as defhc_id_primary
-           ,hospital_name as defhc_name_primary
-           ,score
-           ,score_bucket
-           ,row_number() over (partition by physician_npi 
-                               order by score_bucket desc, score desc)
-                         as rn
-
-            from   hcp_affiliations.physician_org_affiliations
-            where  include_flag = 1 and
-                   current_flag = 1 and 
-                   firm_type='{FIRM_TYPE}'
-       """)
-
-prim_aff.filter(F.col('rn')==1).createOrReplaceTempView('prim_aff_vw')
-
-# COMMAND ----------
-
-# take martdim.d_provider as source of truth for ALL individual NPIs, and join on other NPI-info including affiliations created above
-# for those with null/no specialty assignment, set specialty columns according to those with 'Other' (unknown) specialty
-
-hcps = spark.sql(f"""
-
-    select cast(pv.NPI as int) as npi
-          ,coalesce(pv.PrimarySpecialty, 'Other') as PrimarySpecialty
-          ,pv.ProviderName
-          
-          ,coalesce(sp.specialty_cat, 'Other') as specialty_cat
-          ,coalesce(sp.specialty_type, 'None') as specialty_type
-          ,coalesce(sp.include_pie, 'N') as include_pie
-          
-          ,aff.defhc_id_primary
-          ,aff.defhc_name_primary
-          
-          ,{affiliated_flag('aff.defhc_id_primary', DEFHC_ID)}
-          
-          ,cp.hq_zip_code as zip
-          ,concat("{PHYS_LINK}", pv.npi) as npi_url
-          
-    from martdim.d_provider pv
-
-          left join   prim_aff_vw aff
-          on          pv.NPI = aff.physician_npi
-
-          left join  {DATABASE}.hcp_specialty_assignment sp
-          on         pv.PrimarySpecialty = sp.specialty_name
-          
-          left join  definitivehc.hospital_physician_compare_physicians cp
-          on         pv.NPI = cp.npi
-
-""")
-
-hcps.createOrReplaceTempView('hcps_base_vw')
-
-# COMMAND ----------
-
-# confirm unique by npi
-
-test_distinct_func(sdf = hcps,
-                   name = 'all_hcps',
-                   cols = ['npi'],
-                   to_subset = False
-                  )
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC #### 1C. Create temp view of all HCO NPIs with IDs/networks
+# MAGIC #### 1B. Create temp view of all HCO NPIs with IDs/networks
 
 # COMMAND ----------
 
@@ -292,6 +216,162 @@ test_distinct_func(sdf = hcos_npi,
                   cols = ['npi'],
                   to_subset = False
                  )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 1C. Create temp view of all HCPs with IDs/affiliations/specialty
+
+# COMMAND ----------
+
+# read in affiliations to identify for each NPI:
+#  -- TOP affiliation for given firm type,
+#  --  whether ANY affiliation is equal to given facility
+
+hcp_affs = spark.sql(f"""
+
+    select physician_npi
+           ,max(case when rn=1 then defhc_id else null end) as defhc_id_primary
+           ,max(case when rn=1 then hospital_name else null end) as defhc_name_primary
+           
+           ,max(case when rn=1 and defhc_id = {DEFHC_ID} then 1 else 0 end) as primary_affiliation
+           ,max(case when rn>1 and defhc_id = {DEFHC_ID} then 1 else 0 end) as any_affiliation
+           
+    from (
+    
+        select physician_npi
+               ,defhc_id
+               ,hospital_name
+               ,row_number() over (partition by physician_npi 
+                                   order by score_bucket desc, score desc)
+                             as rn
+
+                from   hcp_affiliations.physician_org_affiliations
+                where  include_flag = 1 and
+                       current_flag = 1 and 
+                       firm_type='{FIRM_TYPE}'
+                       
+           ) a
+           
+     group by physician_npi
+   """)
+
+hcp_affs.createOrReplaceTempView('hcp_affs_vw')
+
+# COMMAND ----------
+
+"""
+ join above table at NPI-level to hcos_npi_base_vw with by unique defhc_id to get net_defhc_id
+ to identify whether top affiliation for each provider is in network,
+ create 2 and 4 category affiliations
+ 
+ two category affiliation:
+   1. Primary affiliation to given facility
+   2. ANY affiliation to given facility
+
+four category affiliation:
+   1. Primary affiliation to given facility
+   2. Primary affiliation to different facility but in network
+   3. Primary affiliation to different facility outside of network
+   4. Primary affiliation unknown: NOTE, this assignment can only be done in a later step 
+          because all HCPs in this table will have a non-null affiliation
+
+"""
+
+hcp_affs_net = spark.sql("""
+    
+    select a.*
+        
+          ,case when primary_affiliation=1 then '1. Primary'
+                when any_affiliation=1 then '2. Any'
+                else null
+                end as affiliation_2cat
+
+          ,case when primary_affiliation=1 then '1. Primary' 
+                when b.network_flag = 'In-Network' then '2. In-Network'
+                when defhc_id_primary is not null then '3. Competitor'
+                else null
+                end as affiliation_4cat
+    
+    from hcp_affs_vw a
+         left join
+         (select distinct defhc_id, network_flag from hcos_npi_base_vw) b
+         
+     on a.defhc_id_primary = b.defhc_id
+     
+    """)
+
+hcp_affs_net.createOrReplaceTempView('hcp_affs_net_vw')
+
+# COMMAND ----------
+
+sdf_frequency(hcp_affs_net, ['primary_affiliation', 'any_affiliation', 'affiliation_2cat', 'affiliation_4cat'], order='cols')
+
+# COMMAND ----------
+
+hcp_affs_net.filter(F.col('affiliation_2cat')=='1. Primary').limit(50).display()
+
+# COMMAND ----------
+
+hcp_affs_net.filter(F.col('affiliation_2cat')=='2. Any').limit(50).display()
+
+# COMMAND ----------
+
+hcp_affs_net.filter(F.col('affiliation_4cat')=='2. In-Network').limit(50).display()
+
+# COMMAND ----------
+
+hcp_affs_net.filter(F.col('affiliation_4cat')=='3. Competitor').limit(50).display()
+
+# COMMAND ----------
+
+# take martdim.d_provider as source of truth for ALL individual NPIs, and join on other NPI-info including affiliations created above
+# for those with null/no specialty assignment, set specialty columns according to those with 'Other' (unknown) specialty
+
+hcps = spark.sql(f"""
+
+    select cast(pv.NPI as int) as npi
+          ,coalesce(pv.PrimarySpecialty, 'Other') as PrimarySpecialty
+          ,pv.ProviderName
+          
+          ,coalesce(sp.specialty_cat, 'Other') as specialty_cat
+          ,coalesce(sp.specialty_type, 'None') as specialty_type
+          ,coalesce(sp.include_pie, 'N') as include_pie
+          
+          ,aff.defhc_id_primary
+          ,aff.defhc_name_primary
+          
+          ,aff.affiliation_2cat
+          ,coalesce(aff.affiliation_4cat, '4. Independent') as affiliation_4cat
+          
+          ,cp.hq_zip_code as zip
+          ,concat("{PHYS_LINK}", pv.npi) as npi_url
+          
+    from martdim.d_provider pv
+
+          left join   hcp_affs_net_vw aff
+          on          pv.NPI = aff.physician_npi
+
+          left join  {DATABASE}.hcp_specialty_assignment sp
+          on         pv.PrimarySpecialty = sp.specialty_name
+          
+          left join  definitivehc.hospital_physician_compare_physicians cp
+          on         pv.NPI = cp.npi
+
+""").checkpoint()
+
+hcps.createOrReplaceTempView('hcps_base_vw')
+
+# COMMAND ----------
+
+# confirm unique by npi
+
+test_distinct_func(sdf = hcps,
+                   name = 'all_hcps',
+                   cols = ['npi'],
+                   to_subset = False
+                  )
 
 # COMMAND ----------
 
@@ -514,7 +594,8 @@ hcps_full = spark.sql(f"""
         , pv.ProviderName
         , pv.defhc_id_primary
         , pv.defhc_name_primary
-        , pv.affiliated_flag
+        , pv.affiliation_2cat
+        , pv.affiliation_4cat
         
         , pv.PrimarySpecialty
         
@@ -530,7 +611,7 @@ hcps_full = spark.sql(f"""
 
           left join  nearby_hcps_vw np 
           on   pv.NPI = np.NPI
-""")
+""").checkpoint()
 
 hcps_full.createOrReplaceTempView('hcps_full_vw')
 
@@ -688,7 +769,8 @@ df_mxclaims_master = spark.sql(f"""
         , prov.nearby as nearby_prov
                 
         , prov.defhc_id_primary as provider_primary_affiliation_id
-        , {affiliated_flag('prov.defhc_id_primary', DEFHC_ID)}
+        , prov.affiliation_2cat
+        , prov.affiliation_4cat
         
         , pos.pos_cat
         
@@ -745,12 +827,6 @@ test_distinct_func(sdf = hive_to_df(TBL_NAME),
                    name = TBL_NAME,
                    cols = ['DHCClaimId']
                   )
-
-# COMMAND ----------
-
-# look at flag for nearby_prov (null means invalid rendering NPI)
-
-sdf_frequency(hive_to_df(TBL_NAME), ['nearby_prov'], with_pct=True)
 
 # COMMAND ----------
 
@@ -838,7 +914,8 @@ referrals1 = spark.sql(f"""
         , ref.specialty_cat as specialty_cat_pcp
         , ref.specialty_type as specialty_type_pcp
         , ref.ProviderName as name_pcp
-        , ref.affiliated_flag as affiliated_flag_pcp
+        , ref.affiliation_2cat as affiliation_2cat_pcp
+        , ref.affiliation_4cat as affiliation_4cat_pcp
         , ref.defhc_name_primary as affiliation_pcp
         , ref.zip as zip_pcp
         , ref.npi_url as npi_url_pcp
@@ -850,7 +927,8 @@ referrals1 = spark.sql(f"""
         , rend.specialty_cat as specialty_cat_spec
         , rend.specialty_type as specialty_type_spec
         , rend.ProviderName as name_spec
-        , rend.affiliated_flag as affiliated_flag_spec
+        , rend.affiliation_2cat as affiliation_2cat_spec
+        , rend.affiliation_4cat as affiliation_4cat_spec
         , rend.defhc_name_primary as affiliation_spec
         , rend.zip as zip_spec
         , rend.npi_url as npi_url_spec
@@ -934,12 +1012,6 @@ test_distinct_func(sdf = hive_to_df(TBL_NAME),
               name = TBL_NAME,
               cols = ['rend_claim_id']
              )
-
-# COMMAND ----------
-
-# crosstab of indicators
-
-sdf_frequency(hive_to_df(TBL_NAME), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
 
 # COMMAND ----------
 
@@ -1070,7 +1142,7 @@ inpat_stays_sdf.createOrReplaceTempView('inpat_stays_vw')
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ##### 3Cii. Identify 90-Day readmissions post-discharge
+# MAGIC ##### 3Cii. Identify 90-day readmissions post-discharge
 
 # COMMAND ----------
 
@@ -1284,7 +1356,7 @@ sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_id"), ['FirmTypeName'])
 
 # HCP: look at creation of affiliated and PCP flags
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['affiliated_flag', 'defhc_id_primary'])
+sdf_frequency(hcp_affs_net, ['primary_affiliation', 'any_affiliation', 'affiliation_2cat', 'affiliation_4cat'], order='cols')
 
 sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['specialty_type', 'PrimarySpecialty'], order='cols', maxobs=100)
 
@@ -1312,11 +1384,13 @@ for col in COLS:
 
 # COMMAND ----------
 
-# CLAIMS: crosstabs of pos_cat by pos, affiliated flag vs ID
+# CLAIMS: crosstabs of pos_cat by pos, affiliated flag vs ID, nearby_prov
 
 sdf_frequency(sdf_claims, ['pos_cat', 'PlaceOfServiceCd'], order='cols', with_pct=True, maxobs=100)
 
 sdf_frequency(sdf_claims, ['affiliated_flag', 'provider_primary_affiliation_id'])
+
+sdf_frequency(sdf_claims, ['nearby_prov'], with_pct=True)
 
 # COMMAND ----------
 
