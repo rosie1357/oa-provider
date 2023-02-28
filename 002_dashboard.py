@@ -21,6 +21,7 @@
 # MAGIC   - {FAC_DATABASE}.nearby_hcos_npi
 # MAGIC   - {FAC_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {FAC_DATABASE}.{PCP_REFS_TBL}
+# MAGIC   - {FAC_DATABASE}.inpat90_dashboard
 # MAGIC   - MartDim.D_Organization
 # MAGIC   - MxMart.F_MxClaim
 # MAGIC   
@@ -242,7 +243,7 @@ hosp_asc_pie = get_top_values(intable = 'mxclaims_master_vw',
                                defhc_value = INPUT_NETWORK,
                                max_row = 4,
                                strat_cols=['pos_cat'],
-                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgical Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
+                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 
 hosp_asc_pie.createOrReplaceTempView('hosp_asc_pie_vw')
@@ -300,7 +301,7 @@ hosp_asc_bar = get_top_values(intable = 'mxclaims_master_vw',
                                defhc_value = DEFHC_ID,
                                max_row = 5,
                                strat_cols=['pos_cat'],
-                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgical Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
+                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 
 # COMMAND ----------
@@ -403,32 +404,16 @@ upload_to_s3_func(TBL_NAME)
 
 # COMMAND ----------
 
+# read in dashboard counts (already aggregated to level needed for chart)
 
-# TODO: fix the below, just using this original query to get tables populated with some counts 
-
-patient_visits_after_inpatient = spark.sql(f"""
-with t1 as (
-SELECT DISTINCT patientid,
-       mxclaimdatekey
-  FROM mxclaims_master_vw
- WHERE PlaceOfServiceCd = 21
- AND defhc_id = {DEFHC_ID}
- ),
- t2 as (
- SELECT a.patientid,
-        coalesce(a.pos_cat, 'Other') as place_of_service,
-        a.network_flag
-  FROM  mxclaims_master_vw a
-  JOIN T1 
-  ON t1.patientid = a.patientid 
-WHERE a.mxclaimdatekey <= date_add(t1.mxclaimdatekey, 90)
-AND a.mxclaimdatekey > t1.mxclaimdatekey
-)
-SELECT network_flag
-       ,place_of_service
-       ,count(*) as count 
- FROM t2 
- GROUP BY 1,2""")
+pat_visits_sdf = spark.sql("""
+    
+    select place_of_service
+           ,network_flag
+           ,count
+           
+    from inpat90_dashboard_vw 
+""")
 
 # COMMAND ----------
 
@@ -436,7 +421,7 @@ SELECT network_flag
 
 TBL_NAME = f"{DATABASE}.page1_vis90_inpat_stay"
 
-page1_vis90_inpat_stay = create_final_output_func(patient_visits_after_inpatient)
+page1_vis90_inpat_stay = create_final_output_func(pat_visits_sdf)
 
 COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_vis90_inpat_stay.sort('network_flag', 'place_of_service'), TBL_NAME)
 

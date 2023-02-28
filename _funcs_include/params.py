@@ -28,9 +28,15 @@ ALL_TABLES = ['input_org_info',
               'nearby_hcos_id',
               'nearby_hcps',
               'nearby_hcos_npi',
+              'inpat90_dashboard',
+              'inpat90_facilities',
               MX_CLMS_TBL,
               PCP_REFS_TBL
              ]
+
+# COMMAND ----------
+
+NEW_STAY_DAYS_CUTOFF = 7
 
 # COMMAND ----------
 
