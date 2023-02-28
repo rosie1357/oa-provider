@@ -27,8 +27,6 @@
 # MAGIC   - MartDim.D_Organization
 # MAGIC   - MartDim.D_Profile
 # MAGIC   - MartDim.D_Provider
-# MAGIC   - ds_payer_mastering.mx_claims_imputed_payers
-# MAGIC   - ds_payer_mastering.encoded_payer_id_mapping
 # MAGIC   - {DATABASE}.explicit_referrals
 # MAGIC   - {DATABASE}.implicit_referrals_pcp_specialist
 # MAGIC   
@@ -39,6 +37,8 @@
 # MAGIC   - {FAC_DATABASE}.nearby_hcos_npi
 # MAGIC   - {FAC_DATABASE}.{MX_CLMS_TBL}
 # MAGIC   - {FAC_DATABASE}.{PCP_REFS_TBL}
+# MAGIC   - {FAC_DATABASE}.inpat90_dashboard
+# MAGIC   - {FAC_DATABASE}.inpat90_facilities
 
 # COMMAND ----------
 
@@ -62,6 +62,12 @@ FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
 # create dictionary of counts to fill in for each perm table and return on pass
 
 COUNTS_DICT = {}
+
+# to pull in claims for 90-days post-inpatient stay, create END_DATE + 90 days
+
+END_DATE_P90 = add_time(END_DATE, add_days=90)
+
+print(f"START_DATE = {START_DATE}, END_DATE = {END_DATE}, END_DATE + 90 DAYS = {END_DATE_P90}")
 
 # COMMAND ----------
 
@@ -94,7 +100,7 @@ test_distinct_func = partial(test_distinct, DEFHC_ID, RADIUS, START_DATE, END_DA
 
 input_org_info = spark.sql(f"""
     select hospital_name as defhc_name
-        ,  network_id as input_network
+        ,  coalesce(network_parent_id, network_id) as input_network
         ,  firm_type
         ,  trim(concat(ifnull(hq_address, ''), ' ', ifnull(hq_address1, ''))) as address 
         ,  hq_city as defhc_city
@@ -648,11 +654,15 @@ create_age_stmt = """ case when PatientBirthYearNum != 9999 then MxClaimYear - P
 # COMMAND ----------
 
 # inner join full claims to NEARBY HCO NPIs, and join to ALL HCP NPIs, keeping indicator for nearby HCP
+# subset claims to given time period PLUS 90 days: the final perm table will only be given time frame,
+# but the plus 90 days will be used to create inpatient stays in 3C
 
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
            mc.DHCClaimId
         ,  mc.ClaimTypeCd
+        ,  mc.MxClaimYear
+        ,  mc.MxClaimMonth
         ,  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') as mxclaimdatekey
         ,  mc.PatientId 
         ,  mc.PlaceOfServiceCd
@@ -695,7 +705,7 @@ df_mxclaims_master = spark.sql(f"""
            left join {DATABASE}.pos_category_assign pos
            on        mc.PlaceOfServiceCd = pos.PlaceOfServiceCd
            
-    where  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE}' and
+    where  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') between '{START_DATE}' and '{END_DATE_P90}' and
            mc.MxClaimYear >= 2016 and
            mc.MxClaimMonth between 1 and 12
            
@@ -704,13 +714,20 @@ df_mxclaims_master = spark.sql(f"""
 
 # COMMAND ----------
 
-# if SUBSET_LT18 == 1, subset to age between 0 and 17 (but examine ages before and after)
+# if SUBSET_LT18 == 1, subset to age between 0 and 17, confirm correct ages kept
 
 if SUBSET_LT18 == 1:    
     
     df_mxclaims_master = df_mxclaims_master.filter(F.col('patient_age').between(0, 17))
     
-    sdf_frequency(df_mxclaims_master, ['patient_age'], order='cols')
+    df_mxclaims_master.select('patient_age').summary("min", "max").display()
+
+# COMMAND ----------
+
+# subset perm claims table to given time frame, drop patient_age (not needed anymore)
+
+df_mxclaims_master_fnl = df_mxclaims_master.filter(F.col('mxclaimdatekey').between(START_DATE, END_DATE)) \
+                                           .drop('patient_age')
 
 # COMMAND ----------
 
@@ -718,7 +735,7 @@ if SUBSET_LT18 == 1:
 
 TBL_NAME = f"{FAC_DATABASE}.{MX_CLMS_TBL}"
 
-mxclaims_out = create_final_output_func(df_mxclaims_master.drop('patient_age'))
+mxclaims_out = create_final_output_func(df_mxclaims_master_fnl)
 
 COUNTS_DICT[TBL_NAME] = insert_into_output_func(mxclaims_out, TBL_NAME)
 
@@ -748,6 +765,7 @@ sdf_frequency(hive_to_df(TBL_NAME), ['nearby_prov'], with_pct=True)
 referrals = spark.sql(f"""
         select a.*
              , pos.pos_cat as rend_pos_cat
+             , {create_age_stmt}
              
        from (
         
@@ -755,11 +773,12 @@ referrals = spark.sql(f"""
                ,   ref_NPI 
                ,   rend_NPI 
                ,   rend_claim_date
-               ,   rend_claim_year
+               ,   rend_claim_year as MxClaimYear
                ,   patient_id 
                ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_fac_npi
                ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_fac_npi
                ,   rend_pos
+               ,   patient_birth_year as PatientBirthYearNum
             from   {DATABASE}.explicit_referrals 
             where  rend_claim_date between '{START_DATE}' and '{END_DATE}'
 
@@ -769,11 +788,12 @@ referrals = spark.sql(f"""
                ,   ref_NPI 
                ,   rend_NPI 
                ,   rend_claim_date
-               ,   rend_claim_year
+               ,   rend_claim_year as MxClaimYear
                ,   patient_id 
                ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_fac_npi
                ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_fac_npi
                ,   rend_pos
+               ,   patient_birth_year as PatientBirthYearNum
             from   {DATABASE}.implicit_referrals_pcp_specialist
             where  rend_claim_date between '{START_DATE}' and '{END_DATE}'
         
@@ -787,26 +807,11 @@ referrals = spark.sql(f"""
 
 # COMMAND ----------
 
-#if SUBSET_LT18 == 1, join to MxMart.F_MxClaim to get patient age and make subset
+# if SUBSET_LT18 == 1, subset to age between 0 and 17
 
-if SUBSET_LT18 == 1:
+if SUBSET_LT18 == 1:    
     
-    referrals.createOrReplaceTempView('referrals_vw')
-    
-    referrals = spark.sql(f"""
-        select a.*
-              , {create_age_stmt}
-        
-        from referrals_vw a
-        
-             left join  MxMart.F_MxClaim mc 
-        
-             on a.rend_claim_year = mc.MxClaimYear and 
-                a.rend_claim_id = mc.DHCClaimId
-    
-    """).filter(F.col('patient_age').between(0,17))
-    
-    sdf_frequency(referrals, ['patient_age'], order='cols')
+    referrals = referrals.filter(F.col('patient_age').between(0, 17))
 
 # COMMAND ----------
 
@@ -913,7 +918,7 @@ referrals_fnl = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
+# call create final output to join to base cols and add timestamp, and insert output for insert into table
 
 TBL_NAME = f"{FAC_DATABASE}.{PCP_REFS_TBL}"
 
@@ -935,6 +940,314 @@ test_distinct_func(sdf = hive_to_df(TBL_NAME),
 # crosstab of indicators
 
 sdf_frequency(hive_to_df(TBL_NAME), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### 3C. Inpatient Stays
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC ##### 3Ci. Roll-up master claims to stay-level
+
+# COMMAND ----------
+
+# take master claims with 90 days post end date to create inpatient stays:
+# keep needed cols and checkpoint the table, creating view to use for creation of stays and visits post-90
+
+mxclaims_p90_sdf = df_mxclaims_master.select('DHCClaimId', 'MxClaimYear', 'MxClaimMonth', 'mxclaimdatekey', 'patientid', 'defhc_id',
+                                             'defhc_name', 'network_flag', 'pos_cat', 'facility_type') \
+                                     .checkpoint()
+
+mxclaims_p90_sdf.createOrReplaceTempView('mxclaims_p90_vw')
+
+# COMMAND ----------
+
+# use final master claims table (subset to given time frame) to identify all inpatient claims, 
+# joining back to service lines to get min/max of service dates
+# aggregate to patient/claim date/facility/provider-level, getting min and max of dates
+
+inpat_claims_sdf = spark.sql(f"""
+
+    select *
+             -- create claim start and end dates based on EARLIEST and LATEST of all three combos
+             
+           , least(claim_date, min_service_to, min_service_from) as claim_start_date
+           , greatest(claim_date, max_service_to, max_service_from) as claim_end_date
+    
+    from (
+        select PatientId
+            ,  mxclaimdatekey as claim_date
+            ,  defhc_id
+            ,  defhc_name
+            ,  network_flag
+
+            ,  min_service_from
+            ,  max_service_from
+            
+            ,  min_service_to
+            ,  max_service_to
+
+        from   mxclaims_p90_vw a 
+        
+               inner  join 
+               
+                (select MxClaimYear
+                       ,MxClaimMonth
+                       ,DHCClaimId
+                       ,to_date(cast(min(ServiceFromDateKey) as string), 'yyyyMMdd') as min_service_from
+                       ,to_date(cast(max(ServiceFromDateKey) as string), 'yyyyMMdd') as max_service_from
+                       
+                       ,to_date(cast(min(ServiceToDateKey) as string), 'yyyyMMdd') as min_service_to
+                       ,to_date(cast(max(ServiceToDateKey) as string), 'yyyyMMdd') as max_service_to
+
+                 from mxmart.f_mxservice
+                 group by MxClaimYear
+                         ,MxClaimMonth
+                         ,DHCClaimId
+                 ) b
+                 
+        on     a.MxClaimYear = b.MxClaimYear and 
+               a.MxClaimMonth = b.MxClaimMonth and 
+               a.DHCClaimId = b.DHCClaimId 
+
+        where  a.pos_cat = 'Hospital Inpatient' and
+               a.facility_type = 'Hospital' and 
+               a.patientid is not null
+    ) c
+
+""")
+
+# COMMAND ----------
+
+# create windows to use below to identify new stays
+
+lag_window = sdf_create_window(partition=['patientid', 'defhc_id'],
+                               order = ['claim_start_date', 'claim_end_date'])
+                              
+sum_window = sdf_create_window(partition=['patientid', 'defhc_id'],
+                               order = ['claim_start_date', 'claim_end_date'],
+                               rows_between = 'unboundedPreceding')
+
+stay_window = sdf_create_window(partition = ['patientid', 'defhc_id', 'stay_number'],
+                               rows_between = 'unboundedBoth')
+
+pat_window = sdf_create_window(partition = ['patientid', 'defhc_id'],
+                              rows_between = 'unboundedBoth')
+
+# COMMAND ----------
+
+# lag dates from prior record and create an indicator for when to create a second stay (at least NEW_STAY_DAYS_CUTOFF between end and start of next)
+# create stay start and end dates as min/max of start/end dates of individual claims for same stay_number (stay 1 begins at a value of 0)
+# count total number of stays per patient/facility
+
+inpat_claims_sdf2 = inpat_claims_sdf.withColumn('lag_end_date', F.lag('claim_end_date').over(lag_window)) \
+                                    .withColumn('new_stay', F.when(F.datediff('claim_start_date', 'lag_end_date') > NEW_STAY_DAYS_CUTOFF, 1).otherwise(0)) \
+                                    .withColumn('stay_number', F.sum('new_stay').over(sum_window)) \
+                                    .withColumn('stay_start_date', F.min('claim_start_date').over(stay_window)) \
+                                    .withColumn('stay_end_date', F.max('claim_end_date').over(stay_window)) \
+                                    .withColumn('number_stays', F.lit(1) + F.max('stay_number').over(pat_window)) \
+                                    .drop('claim_date', 'min_service_from', 'max_service_from', 'min_service_to', 'max_service_to')
+
+# COMMAND ----------
+
+# get distinct of stay-level columns to create stays
+# create indicator for stays to include in baseline (stay_end_date on or before END_DATE) checkpoint table
+# create unique stay_id (combo of patientid, defhc_id and stay_number)
+
+inpat_stays_sdf = inpat_claims_sdf2.select('patientid', 'defhc_id', 'defhc_name', 'network_flag', 'stay_number', 'stay_start_date', 'stay_end_date') \
+                                   .distinct() \
+                                   .withColumn('include_baseline', F.when(F.col('stay_end_date').between(START_DATE, END_DATE), 1).otherwise(0)) \
+                                   .withColumn('stay_id', F.concat_ws('_', F.col('patientid'), F.col('defhc_id'), F.col('stay_number'))) \
+                                   .checkpoint()
+    
+inpat_stays_sdf.createOrReplaceTempView('inpat_stays_vw')
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC ##### 3Cii. Identify 90-Day readmissions post-discharge
+
+# COMMAND ----------
+
+# to identify readmissions, must join all inpatient stays (subset to include_baseline==1 only) back to themselves by patientid,
+# keeping any stays within 90 days of stay_end_date, and counting the UNIQUE stays by network_flag
+# exclude joining given stay to itself
+# exclude any records where ALL FOUR start/end dates are equal (ie both stays are one day each, do not know which occurred first)
+# rename ID and name on initial stays to facility id/name to reflect what we have on facilities page (will need to link with those)
+
+readmit_visits_sdf = spark.sql(f"""
+        
+        select a.patientid
+               ,a.defhc_id as facility_id
+               ,a.defhc_name as facility_name
+                   
+               ,b.network_flag
+               ,b.defhc_id
+               ,b.defhc_name
+               
+               ,a.stay_start_date
+               ,a.stay_end_date
+               ,a.stay_id
+               
+               ,datediff(b.stay_start_date, a.stay_end_date) as diff_days
+               
+               ,case when a.stay_start_date = a.stay_end_date and 
+                          b.stay_start_date = b.stay_end_date and
+                          datediff(b.stay_start_date, a.stay_end_date) = 0
+                    then 1 
+                    else 0
+                    end as same_day_drop
+               
+        from (select * from inpat_stays_vw where include_baseline=1) a
+             inner join
+             inpat_stays_vw b
+         
+        on a.patientid = b.patientid and 
+           a.stay_id != b.stay_id and
+           datediff(b.stay_start_date, a.stay_end_date) between 0 and 90
+    
+""").filter(F.col('same_day_drop')==0)
+
+# COMMAND ----------
+
+# for dashboard: roll up by network_flag, getting count of distinct stay_id values
+
+readmit_counts_sdf = readmit_visits_sdf.groupby('network_flag') \
+                                       .agg(F.countDistinct(F.col('stay_id')).alias('count')) \
+                                       .withColumn('place_of_service', F.lit('Hospital Inpatient'))
+
+# COMMAND ----------
+
+# for top 10 facilities: roll up by facility_id/facility_name (input facilities), and defhc_id/defhc_name (post-discharge facilities)
+
+readmit_fac_counts_sdf = readmit_visits_sdf.groupby('facility_id', 'facility_name', 'defhc_id', 'defhc_name') \
+                                           .agg(F.countDistinct(F.col('stay_id')).alias('count'))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC ##### 3Ciii. Identify 90-day other visits post discharge
+
+# COMMAND ----------
+
+# to identify all other visits, must join all inpatient stays (subset to include_baseline==1 only) to master claims with 90 day runout,
+# keeping any visits within 90 days of stay_end_date, and counting the UNIQUE visits by network_flag and pos
+# filter master claims to non-inpatient POS with non-null patientid
+
+other_visits_sdf = spark.sql(f"""
+        
+        select a.patientid
+               ,a.defhc_id as facility_id
+               ,a.defhc_name as facility_name
+                   
+               ,b.network_flag
+               ,b.defhc_id
+               ,b.defhc_name
+               
+               ,coalesce(b.pos_cat, 'Other') as place_of_service
+               ,b.facility_type
+               ,b.DHCClaimId
+               
+               ,a.stay_start_date
+               ,a.stay_end_date
+               
+               ,b.mxclaimdatekey
+               ,datediff(b.mxclaimdatekey, a.stay_end_date) as diff_days
+               
+        from (select * from inpat_stays_vw where include_baseline=1) a
+        
+             inner join
+             
+             (select * from mxclaims_p90_vw where pos_cat != 'Hospital Inpatient' and patientid is not null) b
+             
+        on a.patientid = b.patientid and
+           datediff(b.mxclaimdatekey, a.stay_end_date) between 0 and 90
+    
+""")
+
+# COMMAND ----------
+
+# for dashboard: roll up by network_flag and place_of_service, getting count of distinct claim ID values
+
+other_counts_sdf = other_visits_sdf.groupby('place_of_service', 'network_flag') \
+                                   .agg(F.countDistinct(F.col('DHCClaimId')).alias('count')) 
+
+# COMMAND ----------
+
+# for top 10 facilities: roll up by facility_id/facility_name (input facilities), and defhc_id/defhc_name (post-discharge facilities)
+
+other_fac_counts_sdf = other_visits_sdf.groupby('facility_id', 'facility_name', 'defhc_id', 'defhc_name') \
+                                       .agg(F.countDistinct(F.col('DHCClaimId')).alias('count'))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC ##### 3Civ. Output Dashboard counts
+
+# COMMAND ----------
+
+# for dashboard:
+# stack readmit and other counts
+# call create final output to join to base cols and add timestamp, and insert output for insert into table
+
+inpat_counts_sdf = other_counts_sdf.unionByName(readmit_counts_sdf)
+
+TBL_NAME = f"{FAC_DATABASE}.inpat90_dashboard"
+
+inpat_counts_out = create_final_output_func(inpat_counts_sdf)
+
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(inpat_counts_out, TBL_NAME)
+
+# COMMAND ----------
+
+# confirm distinct by pos and network_flag
+
+test_distinct_func(sdf = hive_to_df(TBL_NAME),
+              name = TBL_NAME,
+              cols = ['place_of_service', 'network_flag']
+             )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC ##### 3Cv. Output Facility top 10 counts
+
+# COMMAND ----------
+
+# for top 10 facilities:
+# stack readmit and other counts, and sum counts across the two:
+#   (the same destination facility could have inpatient and non-inpatient POS values, so could show up on both )
+
+inpat_fac_counts_sdf = other_fac_counts_sdf.unionByName(readmit_fac_counts_sdf) \
+                                           .groupby('facility_id', 'facility_name', 'defhc_id', 'defhc_name') \
+                                           .agg(F.sum(F.col('count')).alias('count'))
+
+# COMMAND ----------
+
+# call create final output to join to base cols and add timestamp, and insert output for insert into table
+
+TBL_NAME = f"{FAC_DATABASE}.inpat90_facilities"
+
+inpat_fac_counts_out = create_final_output_func(inpat_fac_counts_sdf)
+
+COUNTS_DICT[TBL_NAME] = insert_into_output_func(inpat_fac_counts_out, TBL_NAME)
+
+# COMMAND ----------
+
+# confirm distinct by IDs/names
+
+test_distinct_func(sdf = hive_to_df(TBL_NAME),
+              name = TBL_NAME,
+              cols = ['facility_id', 'facility_name', 'defhc_id', 'defhc_name']
+             )
 
 # COMMAND ----------
 

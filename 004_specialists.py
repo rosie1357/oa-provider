@@ -127,7 +127,7 @@ page3_shares_sdf = spark.sql(f"""
            ,count(*) as count
            
    from mxclaims_master_vw
-   where ( (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgical Center', 'Hospital')) or
+   where ( (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or
            (pos_cat='Hospital Inpatient' and facility_type='Hospital') 
           ) and 
           specialty_type = 'Specialist'
