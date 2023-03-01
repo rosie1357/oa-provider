@@ -288,7 +288,7 @@ hcp_affs_net = spark.sql("""
                 else null
                 end as affiliation_2cat
 
-          ,case when primary_affiliation=1 then 'Primary' 
+          ,case when primary_affiliation=1 then 'Facility' 
                 when b.network_flag = 'In-Network' then 'In-Network'
                 when defhc_id_primary is not null then 'Competitor'
                 else null
