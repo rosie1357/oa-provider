@@ -283,14 +283,14 @@ hcp_affs_net = spark.sql("""
     
     select a.*
         
-          ,case when primary_affiliation=1 then '1. Primary'
-                when secondary_affiliation=1 then '2. Secondary'
+          ,case when primary_affiliation=1 then 'Primary'
+                when secondary_affiliation=1 then 'Secondary'
                 else null
                 end as affiliation_2cat
 
-          ,case when primary_affiliation=1 then '1. Primary' 
-                when b.network_flag = 'In-Network' then '2. In-Network'
-                when defhc_id_primary is not null then '3. Competitor'
+          ,case when primary_affiliation=1 then 'Primary' 
+                when b.network_flag = 'In-Network' then 'In-Network'
+                when defhc_id_primary is not null then 'Competitor'
                 else null
                 end as affiliation_4cat
     
@@ -310,19 +310,19 @@ sdf_frequency(hcp_affs_net, ['primary_affiliation', 'secondary_affiliation', 'af
 
 # COMMAND ----------
 
-hcp_affs_net.filter(F.col('affiliation_2cat')=='1. Primary').limit(50).display()
+hcp_affs_net.filter(F.col('affiliation_2cat')=='Primary').limit(50).display()
 
 # COMMAND ----------
 
-hcp_affs_net.filter(F.col('affiliation_2cat')=='2. Secondary').limit(50).display()
+hcp_affs_net.filter(F.col('affiliation_2cat')=='Secondary').limit(50).display()
 
 # COMMAND ----------
 
-hcp_affs_net.filter(F.col('affiliation_4cat')=='2. In-Network').limit(50).display()
+hcp_affs_net.filter(F.col('affiliation_4cat')=='In-Network').limit(50).display()
 
 # COMMAND ----------
 
-hcp_affs_net.filter(F.col('affiliation_4cat')=='3. Competitor').limit(50).display()
+hcp_affs_net.filter(F.col('affiliation_4cat')=='Competitor').limit(50).display()
 
 # COMMAND ----------
 
@@ -343,7 +343,7 @@ hcps = spark.sql(f"""
           ,aff.defhc_name_primary
           
           ,aff.affiliation_2cat
-          ,coalesce(aff.affiliation_4cat, '4. Independent') as affiliation_4cat
+          ,coalesce(aff.affiliation_4cat, 'Independent') as affiliation_4cat
           
           ,cp.hq_zip_code as zip
           ,concat("{PHYS_LINK}", pv.npi) as npi_url
