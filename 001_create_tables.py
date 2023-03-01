@@ -283,14 +283,14 @@ hcp_affs_net = spark.sql("""
     
     select a.*
         
-          ,case when primary_affiliation=1 then '1. Primary'
-                when secondary_affiliation=1 then '2. Secondary'
+          ,case when primary_affiliation=1 then 'Primary'
+                when secondary_affiliation=1 then 'Secondary'
                 else null
                 end as affiliation_2cat
 
-          ,case when primary_affiliation=1 then '1. Primary' 
-                when b.network_flag = 'In-Network' then '2. In-Network'
-                when defhc_id_primary is not null then '3. Competitor'
+          ,case when primary_affiliation=1 then 'Primary' 
+                when b.network_flag = 'In-Network' then 'In-Network'
+                when defhc_id_primary is not null then 'Competitor'
                 else null
                 end as affiliation_4cat
     
@@ -310,19 +310,19 @@ sdf_frequency(hcp_affs_net, ['primary_affiliation', 'secondary_affiliation', 'af
 
 # COMMAND ----------
 
-hcp_affs_net.filter(F.col('affiliation_2cat')=='1. Primary').limit(50).display()
+hcp_affs_net.filter(F.col('affiliation_2cat')=='Primary').limit(50).display()
 
 # COMMAND ----------
 
-hcp_affs_net.filter(F.col('affiliation_2cat')=='2. Secondary').limit(50).display()
+hcp_affs_net.filter(F.col('affiliation_2cat')=='Secondary').limit(50).display()
 
 # COMMAND ----------
 
-hcp_affs_net.filter(F.col('affiliation_4cat')=='2. In-Network').limit(50).display()
+hcp_affs_net.filter(F.col('affiliation_4cat')=='In-Network').limit(50).display()
 
 # COMMAND ----------
 
-hcp_affs_net.filter(F.col('affiliation_4cat')=='3. Competitor').limit(50).display()
+hcp_affs_net.filter(F.col('affiliation_4cat')=='Competitor').limit(50).display()
 
 # COMMAND ----------
 
@@ -343,7 +343,7 @@ hcps = spark.sql(f"""
           ,aff.defhc_name_primary
           
           ,aff.affiliation_2cat
-          ,coalesce(aff.affiliation_4cat, '4. Independent') as affiliation_4cat
+          ,coalesce(aff.affiliation_4cat, 'Independent') as affiliation_4cat
           
           ,cp.hq_zip_code as zip
           ,concat("{PHYS_LINK}", pv.npi) as npi_url
@@ -1350,7 +1350,7 @@ if RUN_QC==0:
 
 # HCO IDs: freq of firm type
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_id"), ['FirmTypeName'])
+sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcos_id"), ['FirmTypeName'])
 
 # COMMAND ----------
 
@@ -1358,21 +1358,21 @@ sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_id"), ['FirmTypeName'])
 
 sdf_frequency(hcp_affs_net, ['primary_affiliation', 'secondary_affiliation', 'affiliation_2cat', 'affiliation_4cat'], order='cols')
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcps"), ['specialty_type', 'PrimarySpecialty'], order='cols', maxobs=100)
+sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcps"), ['specialty_type', 'PrimarySpecialty'], order='cols', maxobs=100)
 
 # COMMAND ----------
 
 # HCO NPIs: creation of network_flag, facility type from firm type
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"), ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', with_pct=True, maxobs=100)
+sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcos_npi"), ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', with_pct=True, maxobs=100)
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.nearby_hcos_npi"), ['FirmTypeName', 'facility_type'], order='cols')
+sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcos_npi"), ['FirmTypeName', 'facility_type'], order='cols')
 
 # COMMAND ----------
 
 # CLAIMS: look at % null for joined on cols
 
-sdf_claims = hive_to_df(f"{TMP_DATABASE}.{MX_CLMS_TBL}")
+sdf_claims = hive_to_df(f"{FAC_DATABASE}.{MX_CLMS_TBL}")
 
 COLS = ['defhc_id', 'net_defhc_id', 'payer_id', 'payer_name']
 
@@ -1396,7 +1396,7 @@ sdf_frequency(sdf_claims, ['nearby_prov'], with_pct=True)
 
 # REFERRALS: crosstab of all indicators
 
-sdf_frequency(hive_to_df(f"{TMP_DATABASE}.{PCP_REFS_TBL}"), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
+sdf_frequency(hive_to_df(f"{FAC_DATABASE}.{PCP_REFS_TBL}"), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
 
 # COMMAND ----------
 
