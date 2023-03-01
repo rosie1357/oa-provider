@@ -345,7 +345,7 @@ aff_specs = spark.sql(f"""
            
     from mxclaims_master_vw
     where specialty_type = 'Specialist' and
-          affiliated_flag = 'Affiliated' and
+          affiliation_2cat = '1. Primary' and
           include_pie = 'Y'
           
     group by network_flag

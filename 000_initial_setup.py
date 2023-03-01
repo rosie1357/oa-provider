@@ -220,7 +220,7 @@ schema = create_empty_output({'npi': IntegerType(),
                               'name': StringType(),
                               'npi_url': StringType(),
                               'specialty_cat': StringType(),
-                              'affiliated_flag': StringType(),
+                              'affiliation_2cat': StringType(),
                               'count_in_network': IntegerType(),
                               'count_out_of_network': IntegerType()
                              })
@@ -234,7 +234,7 @@ pyspark_to_hive(schema, f"{DATABASE}.page3_top_panel_specialists")
 schema = create_empty_output({'net_defhc_id': IntegerType(),
                               'net_defhc_name': StringType(),
                               'specialty_cat': StringType(),
-                              'affiliated_flag': StringType(),
+                              'affiliation_2cat': StringType(),
                               'place_of_service': StringType(),
                               'network_flag': StringType(),
                               'count': IntegerType()
@@ -254,7 +254,7 @@ schema = create_empty_output({'npi_pcp': IntegerType(),
                               'npi_url_spec': StringType(),
                               'specialty_cat_spec': StringType(),
                               'affiliation_spec': StringType(),
-                              'affiliated_flag_spec': StringType(),
+                              'affiliation_2cat_spec': StringType(),
                               'network_flag_spec': StringType(),
                               'count': IntegerType()
                              })
@@ -283,7 +283,7 @@ pyspark_to_hive(schema, f"{DATABASE}.page4_loyalty_map_pcps")
 
 schema = create_empty_output({'npi_pcp': StringType(),
                               'specialty_cat_spec': StringType(),
-                              'affiliated_flag_pcp': StringType(),
+                              'affiliation_4cat_pcp': StringType(),
                               'count_in_network': IntegerType(),
                               'count_out_of_network': IntegerType()
                              })
