@@ -18,7 +18,12 @@
 
 # COMMAND ----------
 
-import time
+# create func decorated with timeit to print elapsed time for each call to batch notebook
+
+@timeit
+def run_batch(arguments_dict):
+    dbutils.notebook.run('_batch_provider_oa_measures', 0, 
+                     arguments=arguments_dict)
 
 # COMMAND ----------
 
@@ -58,18 +63,17 @@ for i, DEFHC_ID in enumerate(DEFHC_ID_LIST):
         
     else:
         
-        start = time.perf_counter()
-        
         print(process_stmt(n=SORT, x='RUNNING'))
         
-        dbutils.notebook.run('_batch_provider_oa_measures', 0, 
-                             arguments={RUN_VALUES['RUN_SETUP'][0]: 0, 
-                                        RUN_VALUES['DEFHC_ID'][0]: DEFHC_ID,
-                                        RUN_VALUES['RADIUS'][0]: RADIUS,
-                                        RUN_VALUES['START_DATE'][0]: START_DATE,
-                                        RUN_VALUES['END_DATE'][0]: END_DATE,
-                                        RUN_VALUES['DATABASE'][0]: 'ds_provider',
-                                        RUN_VALUES['RUN_QC'][0]: 0,
-                                        RUN_VALUES['SUBSET_LT18'][0]: LT18})
-        end = time.perf_counter()
-        print('\t' + f"Total time: {int((end-start)//60)} minutes")
+        run_batch(arguments_dict={RUN_VALUES['RUN_SETUP'][0]: 0, 
+                                 RUN_VALUES['DEFHC_ID'][0]: DEFHC_ID,
+                                 RUN_VALUES['RADIUS'][0]: RADIUS,
+                                 RUN_VALUES['START_DATE'][0]: START_DATE,
+                                 RUN_VALUES['END_DATE'][0]: END_DATE,
+                                 RUN_VALUES['DATABASE'][0]: 'ds_provider',
+                                 RUN_VALUES['RUN_QC'][0]: 0,
+                                 RUN_VALUES['SUBSET_LT18'][0]: LT18})
+
+# COMMAND ----------
+
+
