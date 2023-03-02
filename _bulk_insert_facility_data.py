@@ -27,15 +27,13 @@ def run_batch(arguments_dict):
 
 # COMMAND ----------
 
-# create all default widgets, add a final
+# create all widgets (including optional input table)
 
-RUN_VALUES = get_widgets(include_widgets = list(range(0,8)))
-INPUT_TABLE = dbutils.widgets.get("(8) Input Table")
+RUN_VALUES = get_widgets(include_widgets = list(range(0,9)))
 
 # COMMAND ----------
 
 INPUT_TABLE = dbutils.widgets.get("(8) Input Table")
-print(INPUT_TABLE)
 
 INPUTS = spark.sql(f"""select distinct DEFHC_ID, RADIUS, START_DATE, END_DATE, LT18, INT(SORT) as SORT from {INPUT_TABLE} ORDER BY INT(SORT)""").collect()
 
@@ -73,7 +71,3 @@ for i, DEFHC_ID in enumerate(DEFHC_ID_LIST):
                                  RUN_VALUES['DATABASE'][0]: 'ds_provider',
                                  RUN_VALUES['RUN_QC'][0]: 0,
                                  RUN_VALUES['SUBSET_LT18'][0]: LT18})
-
-# COMMAND ----------
-
-
