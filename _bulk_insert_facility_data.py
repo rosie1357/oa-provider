@@ -55,7 +55,7 @@ for i, DEFHC_ID in enumerate(DEFHC_ID_LIST):
     
     process_stmt = lambda n, x: f"{n}: {x} process for ID {DEFHC_ID}, with a {RADIUS} mile radius, for claims between {START_DATE} and {END_DATE}. Less than 18 filter = {LT18}"
     
-    if SORT < 15:
+    if SORT < 20:
     
         print(process_stmt(n=SORT, x='SKIPPING'))
         
