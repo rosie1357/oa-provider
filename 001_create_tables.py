@@ -288,7 +288,7 @@ hcp_affs_net = spark.sql("""
                 else null
                 end as affiliation_2cat
 
-          ,case when primary_affiliation=1 then 'Primary' 
+          ,case when primary_affiliation=1 then 'Facility' 
                 when b.network_flag = 'In-Network' then 'In-Network'
                 when defhc_id_primary is not null then 'Competitor'
                 else null
@@ -1374,7 +1374,7 @@ sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcos_npi"), ['FirmTypeName', 'f
 
 sdf_claims = hive_to_df(f"{FAC_DATABASE}.{MX_CLMS_TBL}")
 
-COLS = ['defhc_id', 'net_defhc_id', 'payer_id', 'payer_name']
+COLS = ['defhc_id', 'net_defhc_id']
 
 for col in COLS:
     
