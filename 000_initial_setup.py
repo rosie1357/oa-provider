@@ -128,8 +128,10 @@ pyspark_to_hive(spark.createDataFrame(pos_lookups),
 
 # COMMAND ----------
 
-schema = create_empty_output({'table_name': StringType(),
-                              'count': IntegerType()
+schema = create_empty_output({'database': StringType(),
+                              'table_name': StringType(),
+                              'count': IntegerType(),
+                              'most_recent': BooleanType()
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.record_counts")

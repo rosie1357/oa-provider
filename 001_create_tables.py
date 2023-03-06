@@ -55,7 +55,7 @@ from functools import partial
 
 RUN_VALUES = get_widgets()
 
-DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC, SUBSET_LT18 = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC', 'SUBSET_LT18'])
+DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'SUBSET_LT18', 'DATABASE', 'RUN_QC'])
 
 FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
 
@@ -73,16 +73,16 @@ print(f"START_DATE = {START_DATE}, END_DATE = {END_DATE}, END_DATE + 90 DAYS = {
 
 # create base df to create partial for create_final_output function
 
-base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE, id_prefix='input_')
+base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, id_prefix='input_')
 create_final_output_func = partial(create_final_output, base_sdf)
 
 # create partial for insert_into_output function
 
-insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, must_exist=False, id_prefix='input_')
+insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, f"{DATABASE}.record_counts", must_exist=False, id_prefix='input_')
 
 # create partial for test_distinct func
 
-test_distinct_func = partial(test_distinct, DEFHC_ID, RADIUS, START_DATE, END_DATE)
+test_distinct_func = partial(test_distinct, DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
 
 # COMMAND ----------
 

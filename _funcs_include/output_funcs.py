@@ -20,7 +20,7 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 
 # COMMAND ----------
 
-def base_output_table(defhc_id, radius, start_date, end_date, id_prefix=''):
+def base_output_table(defhc_id, radius, start_date, end_date, subset_lt18, id_prefix=''):
     """
     Function to return a one-rec spark df to join to all output tables to keep same columns on every table
     params:
@@ -99,7 +99,39 @@ def create_empty_output(measure_dict):
 
 # COMMAND ----------
 
-def insert_into_output(defhc_id, radius, start_date, end_date, subset_lt18, sdf, table, must_exist=True, maxrecs=25, id_prefix=''):
+def populate_most_recent(sdf, table, condition):
+    """
+    Function populate_most_recent to identify any recs in given table to set as most_recent=False before inserting recent recs
+    params:
+        sdf spark df: sdf to insert (without most_recent col)
+        table str: name of table to update
+        condition str: where stmt (without leading 'where') to identify old recs to set as most_recent=False
+        
+    returns:
+        none
+    """
+    
+    # first, identify if there are any existing counts for the same condition/table, and set most_recent = False
+    
+    spark.sql(f"update {table} set most_recent = False where {condition}")
+    
+    # get cols to populate in perm table
+    
+    tbl_cols = hive_tbl_cols(table)
+    
+    # create view and insert into table
+    
+    sdf.createOrReplaceTempView('sdf_vw')
+    
+    spark.sql(f"""
+    insert into {table} ({insert_cols})
+    select *, True as most_recent from sdf_vw
+    """)
+    
+
+# COMMAND ----------
+
+def insert_into_output(defhc_id, radius, start_date, end_date, subset_lt18, counts_table, sdf, table, must_exist=True, maxrecs=25, id_prefix=''):
     """
     Function insert_into_output() to insert new data into table, 
         first checking if there are records existing for given id/radius/dates, and if so, deleting before insertion
@@ -110,6 +142,7 @@ def insert_into_output(defhc_id, radius, start_date, end_date, subset_lt18, sdf,
         start_date str: input start_date
         end_date str: input end_date
         subset_lt18 int: indicator for subset lt18
+        counts_table str: name of table to insert count of records into
         sdf spark df: spark df with records to be inserted (will insert all rows, all columns)
         table str: name of output table 
         must_exist bool: optional param to specify table must exist before run, default = True
@@ -138,8 +171,10 @@ def insert_into_output(defhc_id, radius, start_date, end_date, subset_lt18, sdf,
     sdf.createOrReplaceTempView('sdf_vw')
     
     # only run commands to select/delete from given table IF table must exist OR must not exist but already exists
+    
+    database, table_name = table.split('.')[0], table.split('.')[1]
 
-    table_exists = spark._jsparkSession.catalog().tableExists(table.split('.')[0], table.split('.')[1])
+    table_exists = spark._jsparkSession.catalog().tableExists(database, table_name)
     
     if must_exist or (must_exist==False and table_exists):
 
@@ -186,7 +221,21 @@ def insert_into_output(defhc_id, radius, start_date, end_date, subset_lt18, sdf,
        limit {maxrecs}
        """).display()
     
-    return hive_tbl_count(table, condition = f"where {condition}")
+    tbl_count = hive_tbl_count(table, condition = f"where {condition}")
+    
+    # create sdf with base cols, count and time stamp, then call populate_counts() to set any remaining recs to False and insert new rec
+    
+    counts_sdf = create_final_output(base_sdf = base_output_table(defhc_id, radius, start_date, end_date, subset_lt18), 
+                                     counts_sdf = spark.createDataFrame(pd.DataFrame(data={'database': database,
+                                                                                           'table_name': table_name,
+                                                                                           'count': tbl_count}, index=[0]))
+                                    )
+    
+    populate_most_recent(sdf = counts_sdf,
+                         table = counts_table,
+                         condition = f"{condition} and database = '{database}' and table_name = '{table_name}'")
+    
+    return tbl_count
 
 # COMMAND ----------
 

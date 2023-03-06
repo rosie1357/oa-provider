@@ -40,11 +40,11 @@ from functools import partial
 
 RUN_VALUES = get_widgets()
 
-DEFHC_ID, RADIUS, START_DATE, END_DATE, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'DATABASE', 'RUN_QC'])
+DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'SUBSET_LT18', 'DATABASE', 'RUN_QC'])
 
 FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
 
-create_views(DEFHC_ID, RADIUS, START_DATE, END_DATE, FAC_DATABASE, ALL_TABLES, id_prefix='input_')
+create_views(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, FAC_DATABASE, ALL_TABLES, id_prefix='input_')
 
 INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df('input_org_info_vw'), ['input_network', 'defhc_name'])
 
@@ -56,12 +56,12 @@ COUNTS_DICT = {}
 
 # create base df to create partial for create_final_output function
 
-base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE)
+base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
 create_final_output_func = partial(create_final_output, base_sdf)
 
 # create partial for insert_into_output function
 
-insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE)
+insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
 
 # create partial for save to s3
 
