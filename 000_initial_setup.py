@@ -32,14 +32,14 @@
 
 # COMMAND ----------
 
-import pandas as pd
-
-from functools import reduce
-from pyspark.sql.types import StringType, IntegerType
+# MAGIC %run ./_funcs_include/all_provider_funcs
 
 # COMMAND ----------
 
-# MAGIC %run ./_funcs_include/all_provider_funcs
+import pandas as pd
+
+from functools import reduce
+from pyspark.sql.types import StringType, IntegerType, BooleanType
 
 # COMMAND ----------
 
@@ -124,7 +124,29 @@ pyspark_to_hive(spark.createDataFrame(pos_lookups),
 
 # MAGIC %md
 # MAGIC 
-# MAGIC #### 3A. Dashboard (Page 1)
+# MAGIC #### A. Record count/final run tables
+
+# COMMAND ----------
+
+schema = create_empty_output({'table_name': StringType(),
+                              'count': IntegerType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.record_counts")
+
+# COMMAND ----------
+
+schema = create_empty_output({'success': BooleanType(),
+                              'most_recent': BooleanType()
+                             })
+
+pyspark_to_hive(schema, f"{DATABASE}.run_status")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### B. Dashboard (Page 1)
 
 # COMMAND ----------
 
@@ -200,7 +222,7 @@ pyspark_to_hive(schema, f"{DATABASE}.page1_vis90_inpat_stay")
 
 # MAGIC %md
 # MAGIC 
-# MAGIC #### 3B. Patients (Page 2)
+# MAGIC #### C. Patients (Page 2)
 
 # COMMAND ----------
 
@@ -210,7 +232,7 @@ pyspark_to_hive(schema, f"{DATABASE}.page1_vis90_inpat_stay")
 
 # MAGIC %md
 # MAGIC 
-# MAGIC #### 3C. Specialists (Page 3)
+# MAGIC #### D. Specialists (Page 3)
 
 # COMMAND ----------
 
@@ -263,7 +285,7 @@ pyspark_to_hive(schema, f"{DATABASE}.page3_top_pcp_flow")
 
 # COMMAND ----------
 
-# MAGIC %md #### 3D. PCPs (Page 4)
+# MAGIC %md #### E. PCPs (Page 4)
 
 # COMMAND ----------
 
@@ -321,7 +343,7 @@ pyspark_to_hive(schema, f"{DATABASE}.page4_net_leakage")
 
 # COMMAND ----------
 
-# MAGIC %md #### 3E. Facilities (Page 5)
+# MAGIC %md #### F. Facilities (Page 5)
 
 # COMMAND ----------
 

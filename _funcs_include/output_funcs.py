@@ -28,6 +28,7 @@ def base_output_table(defhc_id, radius, start_date, end_date, id_prefix=''):
         radius int: input radius
         start_date str: input start_date
         end_date str: input end_date
+        subset_lt18 int: indicator for subset to lt18, = 0 or 1
         id_prefix str: optional param to specify prefix on defhc_id (used for initial table creation, will be input_defhc_id), default=''
         
     returns:
@@ -38,7 +39,8 @@ def base_output_table(defhc_id, radius, start_date, end_date, id_prefix=''):
     df = pd.DataFrame(data = {f"{id_prefix}defhc_id": defhc_id,
                              'radius': radius,
                              'start_date': start_date,
-                             'end_date': end_date
+                             'end_date': end_date,
+                             'subset_lt18': subset_lt18
                              },
                              index=[0]
                      )
@@ -80,6 +82,7 @@ def create_empty_output(measure_dict):
                               StructField('radius', IntegerType(), False), \
                               StructField('start_date', StringType(), False), \
                               StructField('end_date', StringType(), False), \
+                              StructField('subset_lt18', IntegerType(), False), \
                              ])
     
     schema_dt = StructType([StructField('current_dt', TimestampType(), False)])
@@ -96,7 +99,7 @@ def create_empty_output(measure_dict):
 
 # COMMAND ----------
 
-def insert_into_output(defhc_id, radius, start_date, end_date, sdf, table, must_exist=True, maxrecs=25, id_prefix=''):
+def insert_into_output(defhc_id, radius, start_date, end_date, subset_lt18, sdf, table, must_exist=True, maxrecs=25, id_prefix=''):
     """
     Function insert_into_output() to insert new data into table, 
         first checking if there are records existing for given id/radius/dates, and if so, deleting before insertion
@@ -106,6 +109,7 @@ def insert_into_output(defhc_id, radius, start_date, end_date, sdf, table, must_
         radius int: input radius
         start_date str: input start_date
         end_date str: input end_date
+        subset_lt18 int: indicator for subset lt18
         sdf spark df: spark df with records to be inserted (will insert all rows, all columns)
         table str: name of output table 
         must_exist bool: optional param to specify table must exist before run, default = True
@@ -125,7 +129,8 @@ def insert_into_output(defhc_id, radius, start_date, end_date, sdf, table, must_
         {id_prefix}defhc_id = {defhc_id} and 
         radius = {radius} and 
         start_date = '{start_date}' and 
-        end_date = '{end_date}'
+        end_date = '{end_date}' and
+        subset_lt18 = {subset_lt18}
         """
     
     # create view from sdf
