@@ -54,20 +54,14 @@ for i, DEFHC_ID in enumerate(DEFHC_ID_LIST):
     SORT = SORT_LIST[i]
     
     process_stmt = lambda n, x: f"{n}: {x} process for ID {DEFHC_ID}, with a {RADIUS} mile radius, for claims between {START_DATE} and {END_DATE}. Less than 18 filter = {LT18}"
-    
-    if SORT < 20:
-    
-        print(process_stmt(n=SORT, x='SKIPPING'))
-        
-    else:
-        
-        print(process_stmt(n=SORT, x='RUNNING'))
-        
-        run_batch(arguments_dict={RUN_VALUES['RUN_SETUP'][0]: 0, 
-                                 RUN_VALUES['DEFHC_ID'][0]: DEFHC_ID,
-                                 RUN_VALUES['RADIUS'][0]: RADIUS,
-                                 RUN_VALUES['START_DATE'][0]: START_DATE,
-                                 RUN_VALUES['END_DATE'][0]: END_DATE,
-                                 RUN_VALUES['DATABASE'][0]: 'ds_provider',
-                                 RUN_VALUES['RUN_QC'][0]: 0,
-                                 RUN_VALUES['SUBSET_LT18'][0]: LT18})
+
+    print(process_stmt(n=SORT, x='RUNNING'))
+
+    run_batch(arguments_dict={RUN_VALUES['RUN_SETUP'][0]: 0, 
+                               RUN_VALUES['DEFHC_ID'][0]: DEFHC_ID,
+                               RUN_VALUES['RADIUS'][0]: RADIUS,
+                               RUN_VALUES['START_DATE'][0]: START_DATE,
+                               RUN_VALUES['END_DATE'][0]: END_DATE,
+                               RUN_VALUES['DATABASE'][0]: 'ds_provider',
+                               RUN_VALUES['RUN_QC'][0]: 0,
+                               RUN_VALUES['SUBSET_LT18'][0]: LT18})

@@ -1374,7 +1374,7 @@ sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcos_npi"), ['FirmTypeName', 'f
 
 sdf_claims = hive_to_df(f"{FAC_DATABASE}.{MX_CLMS_TBL}")
 
-COLS = ['defhc_id', 'net_defhc_id', 'payer_id', 'payer_name']
+COLS = ['defhc_id', 'net_defhc_id']
 
 for col in COLS:
     
