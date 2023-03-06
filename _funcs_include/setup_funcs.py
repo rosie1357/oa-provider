@@ -70,7 +70,12 @@ def get_widgets(include_widgets = list(range(1,8))):
                    7: {'name': "(7) Under 18 Subset",
                        'default': "0",
                        'var': 'SUBSET_LT18',
-                       'clean_func': lambda x: int(x)}
+                       'clean_func': lambda x: int(x)},
+    
+                    8: {'name': "(8) Input Table",
+                       'default': "",
+                       'var': 'INPUT_TABLES',
+                       'clean_func': lambda x: x}
                   }
     
     for w_num in include_widgets:
