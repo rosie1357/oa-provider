@@ -101,7 +101,7 @@ def create_empty_output(measure_dict):
 
 def populate_most_recent(sdf, table, condition):
     """
-    Function populate_most_recent to identify any recs in given table to set as most_recent=False before inserting recent recs
+    Function populate_most_recent to identify any recs in given table to set as most_recent=False and get run count before inserting recent recs
     params:
         sdf spark df: sdf to insert (without most_recent col)
         table str: name of table to update
@@ -111,13 +111,17 @@ def populate_most_recent(sdf, table, condition):
         none
     """
     
-    # first, identify if there are any existing counts for the same condition/table, and set most_recent = False
+    # first, identify if there are any existing counts for the same condition, and set most_recent = False
     
     spark.sql(f"update {table} set most_recent = False where {condition}")
     
+    # second, count the number of existing records in the same for same condition to create run_number
+    
+    prior_runs_count = hive_tbl_count(table, condition = f"where {condition}")
+    
     # get cols to populate in perm table
     
-    tbl_cols = hive_tbl_cols(table)
+    insert_cols = hive_tbl_cols(table)
     
     # create view and insert into table
     
@@ -125,9 +129,14 @@ def populate_most_recent(sdf, table, condition):
     
     spark.sql(f"""
     insert into {table} ({insert_cols})
-    select *, True as most_recent from sdf_vw
+    select {insert_cols}
+    from (
+        select *
+               , True as most_recent
+               , {prior_runs_count+1} as run_number 
+        from sdf_vw
+        ) a
     """)
-    
 
 # COMMAND ----------
 
@@ -230,6 +239,10 @@ def insert_into_output(defhc_id, radius, start_date, end_date, subset_lt18, coun
                                                                                            'table_name': table_name,
                                                                                            'count': tbl_count}, index=[0]))
                                     )
+    
+    # to pass condition, must REMOVE id_prefix if not empty (no prefix on most recent table)
+    
+    condition = condition.replace(f"{id_prefix}defhc_id", 'defhc_id')
     
     populate_most_recent(sdf = counts_sdf,
                          table = counts_table,
