@@ -176,21 +176,39 @@ for index, row in RUNS_DF.iterrows():
 
     defhc_id, radius, start_date, end_date, subset_lt18 = row['DEFHC_ID'], row['RADIUS'], row['START_DATE'], row['END_DATE'], row['LT18']
     print(f"{index+1}. ID = {defhc_id}, radius = {radius}, dates = {start_date} - {end_date}, subset = {subset_lt18}")
-    
-    if defhc_id != '1973': #ran 1973 manually to test
 
-        for table in db_tables:
+    for table in db_tables:
 
-            insert_into_output_partial(defhc_id = defhc_id, radius = radius, start_date = start_date, end_date = end_date, subset_lt18 = subset_lt18,
-                                       counts_table = 'ds_provider.record_counts', sdf = INPUTS, table = f"ds_provider_{defhc_id}.{table}", id_prefix='input_')
+        insert_into_output_partial(defhc_id = defhc_id, radius = radius, start_date = start_date, end_date = end_date, subset_lt18 = subset_lt18,
+                                   counts_table = 'ds_provider.record_counts', sdf = INPUTS, table = f"ds_provider_{defhc_id}.{table}", id_prefix='input_')
+        
+    for table in page_tables:
 
-        for table in page_tables:
+        insert_into_output_partial(defhc_id = defhc_id, radius = radius, start_date = start_date, end_date = end_date, subset_lt18 = subset_lt18,
+                                   counts_table = 'ds_provider.record_counts', sdf = INPUTS, table = f"ds_provider.{table}")
 
-            insert_into_output_partial(defhc_id = defhc_id, radius = radius, start_date = start_date, end_date = end_date, subset_lt18 = subset_lt18,
-                                       counts_table = 'ds_provider.record_counts', sdf = INPUTS, table = f"ds_provider.{table}")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC 
-# MAGIC select * from ds_provider.record_counts order by current_dt
+insert_cols = hive_tbl_cols('ds_provider.run_status')
+
+for index, row in RUNS_DF.iterrows():
+    
+    defhc_id, radius, start_date, end_date, subset_lt18 = row['DEFHC_ID'], row['RADIUS'], row['START_DATE'], row['END_DATE'], row['LT18']
+    print(f"{index+1}. ID = {defhc_id}, radius = {radius}, dates = {start_date} - {end_date}, subset = {subset_lt18}")
+    
+    if defhc_id != '5714':
+        
+        spark.sql(f"""insert into ds_provider.run_status ({insert_cols})
+                        select {insert_cols}
+                        from (select defhc_id, radius, start_date, end_date, subset_lt18, run_number, current_dt, True as most_recent, True as success, Null as fail_reason
+                                            from ds_provider.record_counts
+                                            where defhc_id = {defhc_id} and 
+                                                 radius = {radius} and 
+                                                 start_date = '{start_date}' and 
+                                                 end_date = '{end_date}' and
+                                                 subset_lt18 = {subset_lt18} and
+                                                 database = 'ds_provider'
+                                            limit 1
+                              ) a
+                    """)

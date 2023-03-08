@@ -141,7 +141,8 @@ pyspark_to_hive(schema, f"{DATABASE}.record_counts")
 
 schema = create_empty_output({'success': BooleanType(),
                               'run_number': IntegerType(),
-                              'most_recent': BooleanType()
+                              'most_recent': BooleanType(),
+                              'fail_reason': StringType()
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.run_status")
