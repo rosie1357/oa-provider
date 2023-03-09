@@ -17,7 +17,7 @@
 
 # COMMAND ----------
 
-def test_distinct(defhc_id, radius, start_date, end_date, sdf, name, cols, to_subset=True):
+def test_distinct(defhc_id, radius, start_date, end_date, subset_lt18, sdf, name, cols, to_subset=True):
     """
     Function test_distinct to call sdf_check_distinct() on given sdf and cols,
         and exit notebook with error if NOT distinct
@@ -27,6 +27,7 @@ def test_distinct(defhc_id, radius, start_date, end_date, sdf, name, cols, to_su
         radius int: input radius
         start_date str: input start_date
         end_date str: input end_date
+        subset_lt18 int: indicator for subset to lt18, = 0 or 1
         sdf: spark dataframe
         name str: name of table for print statement
         cols list: list of cols to check distinct by
@@ -43,7 +44,8 @@ def test_distinct(defhc_id, radius, start_date, end_date, sdf, name, cols, to_su
         sdf = sdf.filter(F.col('input_defhc_id')==defhc_id) \
                  .filter(F.col('radius')==radius) \
                  .filter(F.col('start_date')==start_date) \
-                 .filter(F.col('end_date')==end_date)
+                 .filter(F.col('end_date')==end_date) \
+                 .filter(F.col('subset_lt18')==subset_lt18)
     
     distinct_return = sdf_check_distinct(sdf, cols)
     print(distinct_return)
