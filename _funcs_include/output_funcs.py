@@ -22,7 +22,7 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 
 def populate_most_recent(sdf, table, condition):
     """
-    method populate_most_recent to identify any recs in given table to set as most_recent=False and get run count before inserting recent recs
+    function populate_most_recent to identify any recs in given table to set as most_recent=False and get run count before inserting recent recs
     params:
       sdf spark df: sdf to insert (without most_recent col)
       table str: name of table to update
