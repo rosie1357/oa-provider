@@ -60,7 +60,7 @@ RUN_VALUES = get_widgets()
 
 DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'SUBSET_LT18', 'DATABASE', 'RUN_QC'])
 
-ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC, base_output_prefix='_input')
+ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC, base_output_prefix='input_', upload_s3=False)
 
 # COMMAND ----------
 
@@ -99,13 +99,11 @@ input_org_info = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
+# call create final output to join to base cols and add timestamp, and insert output for insert into table
 
 TBL_NAME = f"{FAC_DATABASE}.input_org_info"
 
-input_org_info_out = create_final_output_func(input_org_info)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(input_org_info_out, TBL_NAME)
+ProvRunInstance.create_final_output(input_org_info, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -197,11 +195,11 @@ hcos_npi.createOrReplaceTempView('hcos_npi_base_vw')
 
 # confirm unique by npi
 
-test_distinct_func(sdf = hcos_npi,
-                  name = 'all_hcos_npi',
-                  cols = ['npi'],
-                  to_subset = False
-                 )
+ProvRunInstance.test_distinct(sdf = hcos_npi,
+                              name = 'all_hcos_npi',
+                              cols = ['npi'],
+                              to_subset = False
+                             )
 
 # COMMAND ----------
 
@@ -292,26 +290,6 @@ hcp_affs_net.createOrReplaceTempView('hcp_affs_net_vw')
 
 # COMMAND ----------
 
-sdf_frequency(hcp_affs_net, ['primary_affiliation', 'secondary_affiliation', 'affiliation_2cat', 'affiliation_4cat'], order='cols')
-
-# COMMAND ----------
-
-hcp_affs_net.filter(F.col('affiliation_2cat')=='Primary').limit(50).display()
-
-# COMMAND ----------
-
-hcp_affs_net.filter(F.col('affiliation_2cat')=='Secondary').limit(50).display()
-
-# COMMAND ----------
-
-hcp_affs_net.filter(F.col('affiliation_4cat')=='In-Network').limit(50).display()
-
-# COMMAND ----------
-
-hcp_affs_net.filter(F.col('affiliation_4cat')=='Competitor').limit(50).display()
-
-# COMMAND ----------
-
 # take martdim.d_provider as source of truth for ALL individual NPIs, and join on other NPI-info including affiliations created above
 # for those with null/no specialty assignment, set specialty columns according to those with 'Other' (unknown) specialty
 
@@ -353,11 +331,11 @@ hcps.createOrReplaceTempView('hcps_base_vw')
 
 # confirm unique by npi
 
-test_distinct_func(sdf = hcps,
-                   name = 'all_hcps',
-                   cols = ['npi'],
-                   to_subset = False
-                  )
+ProvRunInstance.test_distinct(sdf = hcps,
+                              name = 'all_hcps',
+                              cols = ['npi'],
+                              to_subset = False
+                              )
 
 # COMMAND ----------
 
@@ -546,22 +524,20 @@ df_nearby_hcos_id2 = spark.sql(f"""
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
+# call create final output to join to base cols and add timestamp, and insert output for insert into table
 
 TBL_NAME = f"{FAC_DATABASE}.nearby_hcos_id"
 
-nearby_hcos_id = create_final_output_func(df_nearby_hcos_id2)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcos_id, TBL_NAME)
+ProvRunInstance.create_final_output(df_nearby_hcos_id2, table=TBL_NAME)
 
 # COMMAND ----------
 
 # confirm unique by id for primary location
 
-test_distinct_func(sdf = hive_to_df(TBL_NAME).filter(F.col('primary')==1),
-                  name = TBL_NAME,
-                  cols = ['defhc_id']
-                )
+ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME).filter(F.col('primary')==1),
+                              name = TBL_NAME,
+                              cols = ['defhc_id']
+                              )
 
 # COMMAND ----------
 
@@ -605,30 +581,28 @@ hcps_full.createOrReplaceTempView('hcps_full_vw')
 
 # check distinct on full table
 
-test_distinct_func(sdf = hcps_full,
-                   name = 'all_hcps_w_nearby',
-                   cols = ['npi'],
-                   to_subset = False
-                   )
+ProvRunInstance.test_distinct(sdf = hcps_full,
+                              name = 'all_hcps_w_nearby',
+                              cols = ['npi'],
+                              to_subset = False
+                              )
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
+# call create final output to join to base cols and add timestamp, and insert output for insert into table
 
 TBL_NAME = f"{FAC_DATABASE}.nearby_hcps"
 
-nearby_hcps = create_final_output_func(hcps_full.filter(F.col('nearby')==1).drop('nearby'))
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcps, TBL_NAME)
+ProvRunInstance.create_final_output(hcps_full.filter(F.col('nearby')==1).drop('nearby'), table=TBL_NAME)
 
 # COMMAND ----------
 
 # check distinct on nearby only table
 
-test_distinct_func(sdf = hive_to_df(TBL_NAME),
-                   name = TBL_NAME,
-                   cols = ['npi']
-                  )
+ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
+                              name = TBL_NAME,
+                              cols = ['npi']
+                             )
 
 # COMMAND ----------
 
@@ -672,30 +646,28 @@ hcos_npi_full.createOrReplaceTempView('hcos_npi_full_vw')
 
 # check distinct on full table
 
-test_distinct_func(sdf = hcos_npi_full,
-                   name = 'all_hcos_npi_w_nearby',
-                   cols = ['npi'],
-                   to_subset = False
-                  )
+ProvRunInstance.test_distinct(sdf = hcos_npi_full,
+                              name = 'all_hcos_npi_w_nearby',
+                              cols = ['npi'],
+                              to_subset = False
+                              )
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
+# call create final output to join to base cols and add timestamp, and insert output for insert into table
 
 TBL_NAME = f"{FAC_DATABASE}.nearby_hcos_npi"
 
-nearby_hcps = create_final_output_func(hcos_npi_full.filter(F.col('nearby')==1).drop('nearby'))
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(nearby_hcps, TBL_NAME)
+ProvRunInstance.create_final_output(hcos_npi_full.filter(F.col('nearby')==1).drop('nearby'), table=TBL_NAME)
 
 # COMMAND ----------
 
 # check distinct on nearby table
 
-test_distinct_func(sdf = hive_to_df(TBL_NAME),
-                   name = TBL_NAME,
-                   cols = ['npi']
-                  )
+ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
+                             name = TBL_NAME,
+                             cols = ['npi']
+                             )
 
 # COMMAND ----------
 
@@ -787,8 +759,6 @@ df_mxclaims_master = spark.sql(f"""
 if SUBSET_LT18 == 1:    
     
     df_mxclaims_master = df_mxclaims_master.filter(F.col('patient_age').between(0, 17))
-    
-    df_mxclaims_master.select('patient_age').summary("min", "max").display()
 
 # COMMAND ----------
 
@@ -799,20 +769,18 @@ df_mxclaims_master_fnl = df_mxclaims_master.filter(F.col('mxclaimdatekey').betwe
 
 # COMMAND ----------
 
-# call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
+# call create final output to join to base cols and add timestamp, and insert output for insert into table
 
 TBL_NAME = f"{FAC_DATABASE}.{MX_CLMS_TBL}"
 
-mxclaims_out = create_final_output_func(df_mxclaims_master_fnl)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(mxclaims_out, TBL_NAME)
+ProvRunInstance.create_final_output(df_mxclaims_master_fnl, table = TBL_NAME)
 
 # COMMAND ----------
 
-test_distinct_func(sdf = hive_to_df(TBL_NAME),
-                   name = TBL_NAME,
-                   cols = ['DHCClaimId']
-                  )
+ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
+                              name = TBL_NAME,
+                              cols = ['DHCClaimId']
+                              )
 
 # COMMAND ----------
 
@@ -986,18 +954,16 @@ referrals_fnl = spark.sql(f"""
 
 TBL_NAME = f"{FAC_DATABASE}.{PCP_REFS_TBL}"
 
-referrals_out = create_final_output_func(referrals_fnl)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(referrals_out, TBL_NAME)
+ProvRunInstance.create_final_output(referrals_fnl, table=TBL_NAME)
 
 # COMMAND ----------
 
 # confirm distinct by rend_claim_id
 
-test_distinct_func(sdf = hive_to_df(TBL_NAME),
-              name = TBL_NAME,
-              cols = ['rend_claim_id']
-             )
+ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
+                              name = TBL_NAME,
+                              cols = ['rend_claim_id']
+                             )
 
 # COMMAND ----------
 
@@ -1259,18 +1225,16 @@ inpat_counts_sdf = other_counts_sdf.unionByName(readmit_counts_sdf)
 
 TBL_NAME = f"{FAC_DATABASE}.inpat90_dashboard"
 
-inpat_counts_out = create_final_output_func(inpat_counts_sdf)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(inpat_counts_out, TBL_NAME)
+ProvRunInstance.create_final_output(inpat_counts_sdf, table = TBL_NAME)
 
 # COMMAND ----------
 
 # confirm distinct by pos and network_flag
 
-test_distinct_func(sdf = hive_to_df(TBL_NAME),
-              name = TBL_NAME,
-              cols = ['place_of_service', 'network_flag']
-             )
+ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
+                              name = TBL_NAME,
+                              cols = ['place_of_service', 'network_flag']
+                             )
 
 # COMMAND ----------
 
@@ -1294,18 +1258,16 @@ inpat_fac_counts_sdf = other_fac_counts_sdf.unionByName(readmit_fac_counts_sdf) 
 
 TBL_NAME = f"{FAC_DATABASE}.inpat90_facilities"
 
-inpat_fac_counts_out = create_final_output_func(inpat_fac_counts_sdf)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(inpat_fac_counts_out, TBL_NAME)
+ProvRunInstance.create_final_output(inpat_fac_counts_sdf, table=TBL_NAME)
 
 # COMMAND ----------
 
 # confirm distinct by IDs/names
 
-test_distinct_func(sdf = hive_to_df(TBL_NAME),
-              name = TBL_NAME,
-              cols = ['facility_id', 'facility_name', 'defhc_id', 'defhc_name']
-             )
+ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
+                              name = TBL_NAME,
+                              cols = ['facility_id', 'facility_name', 'defhc_id', 'defhc_name']
+                             )
 
 # COMMAND ----------
 

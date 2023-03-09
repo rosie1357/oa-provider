@@ -9,11 +9,19 @@
 
 # COMMAND ----------
 
+# MAGIC %run ./credentials
+
+# COMMAND ----------
+
 # MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/fs_funcs
 
 # COMMAND ----------
 
 # MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/sdf_funcs
+
+# COMMAND ----------
+
+# MAGIC %run ./output_funcs
 
 # COMMAND ----------
 
@@ -23,7 +31,8 @@ import pyspark.sql.functions as F
 
 class ProviderRun(object):
     
-    def __init__(self, defhc_id, radius, start_date, end_date, subset_lt18, database, run_qc, 
+    def __init__(self, defhc_id, radius, start_date, end_date, subset_lt18, database, run_qc,
+                 s3_upload = True,
                  base_output_prefix = '', 
                  db_tables = ALL_TABLES,
                  counts_table = COUNTS_TBL,
@@ -36,10 +45,11 @@ class ProviderRun(object):
         self.subset_lt18 = subset_lt18
         self.database = database
         self.run_qc = run_qc
+        self.s3_upload = s3_upload
         self.base_output_prefix = base_output_prefix
         self.db_tables = db_tables
-        self.counts_table = counts_table
-        self.status_table = status_table
+        self.counts_table = f"{self.database}.{counts_table}"
+        self.status_table = f"{self.database}.{status_table}"
         
         # create name for facility-specific database
         self.fac_database = f"{self.database}_{self.defhc_id}"
@@ -52,12 +62,12 @@ class ProviderRun(object):
         
     def condition_stmt(self, id_prefix):
         
-        return f""" {id_prefix}defhc_id = {defhc_id} and 
-                    radius = {radius} and 
-                    start_date = '{start_date}' and 
-                    end_date = '{end_date}' and
-                    subset_lt18 = {subset_lt18}
-                    """
+        return f""" {self.base_output_prefix}defhc_id = {self.defhc_id} and 
+                    radius = {self.radius} and 
+                    start_date = '{self.start_date}' and 
+                    end_date = '{self.end_date}' and
+                    subset_lt18 = {self.subset_lt18}
+                 """
         
     def base_output_table(self):
         """
@@ -78,59 +88,8 @@ class ProviderRun(object):
                          )
 
         return spark.createDataFrame(df)
-    
-    def create_final_output(self, counts_sdf):
-        """
-        method create_final_output to read in base and counts spark dfs to add base columns to counts, and add final time stamp
-        params:
-            counts_sdf sdf: sdf with all counts
 
-        returns:
-            spark df with base_sdf cols, counts_sdf cols, and current_dt
-        """
-
-        return self.base_output_table.join(counts_sdf).withColumn('current_dt', F.current_timestamp())
-    
-    def populate_most_recent(sdf, table, condition):
-        """
-        method populate_most_recent to identify any recs in given table to set as most_recent=False and get run count before inserting recent recs
-        params:
-            sdf spark df: sdf to insert (without most_recent col)
-            table str: name of table to update
-            condition str: where stmt (without leading 'where') to identify old recs to set as most_recent=False
-
-        returns:
-            none
-        """
-
-        # first, identify if there are any existing counts for the same condition, and set most_recent = False
-
-        spark.sql(f"update {table} set most_recent = False where {condition}")
-
-        # second, count the number of existing records in the same for same condition to create run_number
-
-        prior_runs_count = hive_tbl_count(table, condition = f"where {condition}")
-
-        # get cols to populate in perm table
-
-        insert_cols = hive_tbl_cols(table)
-
-        # create view and insert into table
-
-        sdf.createOrReplaceTempView('sdf_vw')
-
-        spark.sql(f"""
-        insert into {table} ({insert_cols})
-        select {insert_cols}
-        from (
-            select *
-                   , True as most_recent
-                   , {prior_runs_count+1} as run_number 
-            from sdf_vw
-            ) a
-        """)
-
-    def insert_into_output(sdf, table, must_exist=True, maxrecs=25, id_prefix=''):
+    def insert_into_output(self, sdf, table, must_exist=True, maxrecs=25):
         """
         method insert_into_output() to insert new data into table, 
             first checking if there are records existing for given id/radius/dates, and if so, deleting before insertion
@@ -141,7 +100,6 @@ class ProviderRun(object):
             must_exist bool: optional param to specify table must exist before run, default = True
                 if not, will create if does NOT exist and will print message that created
             maxrecs int: optional param to specify max recs to display, default = 25
-            id_prefix str: optional param to specify prefix on defhc_id (used for initial table creation, will be input_defhc_id), default=''
 
         returns:
             none (prints sample recs/counts deleted and/or added)
@@ -150,7 +108,7 @@ class ProviderRun(object):
         
         # create condition stmt
         
-        condition = self.condition_stmt(id_prefix)
+        condition = self.condition_stmt(self.base_output_prefix)
 
         # create view from sdf
 
@@ -206,7 +164,12 @@ class ProviderRun(object):
            where {condition}
            limit {maxrecs}
            """).display()
-
+        
+        # upload to s3 if set
+        
+        if self.s3_upload:
+            csv_upload_s3(table, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
+            
         tbl_count = hive_tbl_count(table, condition = f"where {condition}")
         
         # update table counts
@@ -214,21 +177,45 @@ class ProviderRun(object):
 
         # create sdf with base cols, count and time stamp, then call populate_counts() to set any remaining recs to False and insert new rec
 
+
         counts_sdf = self.create_final_output(counts_sdf = spark.createDataFrame(pd.DataFrame(data={'database': database,
                                                                                                     'table_name': table_name,
                                                                                                     'count': tbl_count}, 
-                                                                                              index=[0]))
+                                                                                              index=[0])),
+                                              insert = False
                                              )
 
-        # to pass condition, must REMOVE id_prefix if not empty (no prefix on most recent table)
-
-        condition = condition.replace(f"{id_prefix}defhc_id", 'defhc_id')
+        # on counts_sdf and for condition, if self.base_output_prefix is not empty, must REMOVE id_prefix (no prefix on most recent table)
+        
+        if self.base_output_prefix != '':
+            counts_sdf = counts_sdf.withColumnRenamed(f"{self.base_output_prefix}defhc_id", 'defhc_id')
+            condition = condition.replace(f"{self.base_output_prefix}defhc_id", 'defhc_id')
 
         populate_most_recent(sdf = counts_sdf,
-                             table = counts_table,
+                             table = self.counts_table,
                              condition = f"{condition} and database = '{database}' and table_name = '{table_name}'")
+        
+    def create_final_output(self, counts_sdf, insert=True, **kwargs):
+        """
+        method create_final_output to read in base and counts spark dfs to add base columns to counts, and add final time stamp
+        params:
+            counts_sdf sdf: sdf with all counts
+            insert bool: optional param to specify whether to ADDITIONALLY call self.insert_into_output() to insert final table, default = True
+            **kwargs: kwargs to pass to self.insert_into_output(), if insert=True MUST pass 'table' as kwarg
 
+        returns:
+            none if insert=True (will call self.insert_into_output() after creation of final table),
+                otherwise returns spark df with base_sdf cols, counts_sdf cols, and current_dt
+        """
 
+        final_sdf = self.base_output_table.join(counts_sdf).withColumn('current_dt', F.current_timestamp())
+        
+        if insert:
+            self.insert_into_output(final_sdf, kwargs.get('table'), kwargs.pop('table'))
+            
+        else:
+            return final_sdf
+        
     def create_views(self, id_prefix='input_'):
         """
         method create_views to create temp views for all given tables with subset
@@ -262,7 +249,7 @@ class ProviderRun(object):
 
             print(f"{tbl}_vw created with {cnt:,d} records")
             
-    def test_distinct(sdf, name, cols, to_subset=True):
+    def test_distinct(self, sdf, name, cols, to_subset=True):
         """
         method test_distinct to call sdf_check_distinct() on given sdf and cols,
             and exit notebook with error if NOT distinct

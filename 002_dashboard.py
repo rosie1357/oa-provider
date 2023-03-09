@@ -65,21 +65,6 @@ COUNTS_DICT = {}
 
 # COMMAND ----------
 
-# create base df to create partial for create_final_output function
-
-base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
-create_final_output_func = partial(create_final_output, base_sdf)
-
-# create partial for insert_into_output function
-
-insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
-
-# create partial for save to s3
-
-upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC 
 # MAGIC ### 1. Summary Counts
