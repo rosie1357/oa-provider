@@ -34,10 +34,6 @@
 
 # COMMAND ----------
 
-import pandas as pd
-
-# COMMAND ----------
-
 # create all widgets
  
 RUN_VALUES = get_widgets()
@@ -268,6 +264,12 @@ fac_discharge_sdf = spark.sql("""
 TBL_NAME = f"{DATABASE}.page5_top10_postdis"
 
 ProvRunInstance.create_final_output(fac_discharge_sdf.filter(F.col('rank')<=10), table=TBL_NAME)
+
+# COMMAND ----------
+
+# finally, create final run status record for successful run
+
+ProvRunInstance.insert_run_status()
 
 # COMMAND ----------
 
