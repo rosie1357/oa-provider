@@ -60,7 +60,7 @@ RUN_VALUES = get_widgets()
 
 DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'SUBSET_LT18', 'DATABASE', 'RUN_QC'])
 
-ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC, base_output_prefix='input_', upload_s3=False)
+ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC, base_output_prefix='input_', charts_instance=False)
 
 # COMMAND ----------
 
@@ -1280,7 +1280,7 @@ rm_checkpoints(CHECKPOINT_DIR)
 # create exit function to run either before QC checks or after based on RUN_QC
 
 def exit():
-    exit_notebook({'all_counts': COUNTS_DICT},
+    exit_notebook({'all_counts': ProvRunInstance.table_counts},
                   fail=False)
 
 # COMMAND ----------

@@ -31,41 +31,17 @@
 
 # COMMAND ----------
 
-from functools import partial
+# create all widgets
+ 
+RUN_VALUES = get_widgets()
 
 # COMMAND ----------
 
-# setup: 
-#  create/get widget values, assign fac database and network, create views
-
-RUN_VALUES = get_widgets()
+# get widget values and use to create instance of provider run class
 
 DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'SUBSET_LT18', 'DATABASE', 'RUN_QC'])
 
-FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
-
-create_views(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, FAC_DATABASE, ALL_TABLES, id_prefix='input_')
-
-INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df('input_org_info_vw'), ['input_network', 'defhc_name'])
-
-# create dictionary of counts to fill in for each table insert and return on pass
-
-COUNTS_DICT = {}
-
-# COMMAND ----------
-
-# create base df to create partial for create_final_output function
-
-base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
-create_final_output_func = partial(create_final_output, base_sdf)
-
-# create partial for insert_into_output function
-
-insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
-
-# create partial for save to s3
-
-upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
+ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC)
 
 # COMMAND ----------
 
@@ -101,11 +77,7 @@ page3_top_sdf = spark.sql(f"""
 
 TBL_NAME = f"{DATABASE}.page3_top_panel_specialists"
 
-page3_top_panel_specialists = create_final_output_func(page3_top_sdf)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page3_top_panel_specialists.sort('npi', 'specialty_cat', 'affiliation_2cat'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(page3_top_sdf, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -147,11 +119,7 @@ page3_shares_sdf = spark.sql(f"""
 
 TBL_NAME = f"{DATABASE}.page3_shares"
 
-page3_shares = create_final_output_func(page3_shares_sdf)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page3_shares.sort('net_defhc_id', 'net_defhc_name', 'specialty_cat'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(page3_shares_sdf, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -198,13 +166,9 @@ page3_top_pcp_flow_sdf = spark.sql(f"""
 
 TBL_NAME = f"{DATABASE}.page3_top_pcp_flow"
 
-page3_top_pcp_flow = create_final_output_func(page3_top_pcp_flow_sdf)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page3_top_pcp_flow.sort('npi_pcp', 'npi_spec'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(page3_top_pcp_flow_sdf, table=TBL_NAME)
 
 # COMMAND ----------
 
-exit_notebook({'all_counts': COUNTS_DICT},
+exit_notebook({'all_counts': ProvRunInstance.table_counts},
               fail=False)

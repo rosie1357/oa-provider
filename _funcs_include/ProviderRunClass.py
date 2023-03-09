@@ -32,7 +32,7 @@ import pyspark.sql.functions as F
 class ProviderRun(object):
     
     def __init__(self, defhc_id, radius, start_date, end_date, subset_lt18, database, run_qc,
-                 s3_upload = True,
+                 charts_instance = True,
                  base_output_prefix = '', 
                  db_tables = ALL_TABLES,
                  counts_table = COUNTS_TBL,
@@ -45,7 +45,7 @@ class ProviderRun(object):
         self.subset_lt18 = subset_lt18
         self.database = database
         self.run_qc = run_qc
-        self.s3_upload = s3_upload
+        self.charts_instance = charts_instance
         self.base_output_prefix = base_output_prefix
         self.db_tables = db_tables
         self.counts_table = f"{self.database}.{counts_table}"
@@ -59,6 +59,13 @@ class ProviderRun(object):
         
         # create empty dict to save table counts
         self.table_counts = {}
+        
+        # if charts instance of class, create views and set network and name attributes
+        if self.charts_instance:
+            
+            self.create_views()
+            
+            self.input_network, self.defhc_name = sdf_return_row_values(hive_to_df('input_org_info_vw'), ['input_network', 'defhc_name'])
         
     def condition_stmt(self, id_prefix):
         
@@ -165,9 +172,9 @@ class ProviderRun(object):
            limit {maxrecs}
            """).display()
         
-        # upload to s3 if set
+        # upload to s3 if charts instance of class
         
-        if self.s3_upload:
+        if self.charts_instance:
             csv_upload_s3(table, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
             
         tbl_count = hive_tbl_count(table, condition = f"where {condition}")
@@ -236,7 +243,7 @@ class ProviderRun(object):
             spark.sql(f"""
                 create or replace temp view {tbl}_vw as
                 select * 
-                from {self.database}.{tbl}
+                from {self.fac_database}.{tbl}
                 where {id_prefix}defhc_id = {self.defhc_id} and 
                       radius = {self.radius} and 
                       start_date = '{self.start_date}' and 
@@ -245,7 +252,7 @@ class ProviderRun(object):
             """)
             cnt = hive_tbl_count(f"{tbl}_vw")
 
-            assert cnt >0, f"ERROR: table {self.database}.{table} has 0 records for given id/radius/time frame"
+            assert cnt >0, f"ERROR: table {self.fac_database}.{table} has 0 records for given id/radius/time frame"
 
             print(f"{tbl}_vw created with {cnt:,d} records")
             
