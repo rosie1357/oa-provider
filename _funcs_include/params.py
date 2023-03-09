@@ -17,7 +17,7 @@ PHYS_LINK = "https://www.defhc.com/physicians/"
 
 # COMMAND ----------
 
-# variables to hold names of base tables
+# variables to hold names of base/output tables
 
 MX_CLMS_TBL = 'mxclaims_master'
 PCP_REFS_TBL = 'pcp_referrals'
@@ -34,13 +34,12 @@ ALL_TABLES = ['input_org_info',
               PCP_REFS_TBL
              ]
 
+COUNTS_TBL = 'record_counts'
+STATUS_TBL = 'run_status'
+
 # COMMAND ----------
 
 NEW_STAY_DAYS_CUTOFF = 7
-
-# COMMAND ----------
-
-GET_FAC_DATABASE = lambda db, id: f"{db}_{id}"
 
 # COMMAND ----------
 

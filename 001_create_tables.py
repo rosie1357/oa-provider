@@ -47,42 +47,28 @@
 # COMMAND ----------
 
 from pyspark.sql.types import IntegerType
-from functools import partial
 
 # COMMAND ----------
 
-# get widget values
+# create all widgets
 
 RUN_VALUES = get_widgets()
 
+# COMMAND ----------
+
+# get widget values and use to create instance of provider run class
+
 DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'SUBSET_LT18', 'DATABASE', 'RUN_QC'])
 
-FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
+ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC, base_output_prefix='_input')
 
-# create dictionary of counts to fill in for each perm table and return on pass
-
-COUNTS_DICT = {}
+# COMMAND ----------
 
 # to pull in claims for 90-days post-inpatient stay, create END_DATE + 90 days
 
 END_DATE_P90 = add_time(END_DATE, add_days=90)
 
 print(f"START_DATE = {START_DATE}, END_DATE = {END_DATE}, END_DATE + 90 DAYS = {END_DATE_P90}")
-
-# COMMAND ----------
-
-# create base df to create partial for create_final_output function
-
-base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, id_prefix='input_')
-create_final_output_func = partial(create_final_output, base_sdf)
-
-# create partial for insert_into_output function
-
-insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, f"{DATABASE}.record_counts", must_exist=False, id_prefix='input_')
-
-# create partial for test_distinct func
-
-test_distinct_func = partial(test_distinct, DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
 
 # COMMAND ----------
 

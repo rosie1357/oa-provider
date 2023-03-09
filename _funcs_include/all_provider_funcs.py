@@ -34,3 +34,7 @@
 # COMMAND ----------
 
 # MAGIC %run ./test_funcs
+
+# COMMAND ----------
+
+# MAGIC %run ./ProviderRunClass
