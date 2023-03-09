@@ -100,7 +100,7 @@ def return_widget_values(widget_dict, vars):
 
 # COMMAND ----------
 
-def create_views(defhc_id, radius, start_date, end_date, database, tables, id_prefix=''):
+def create_views(defhc_id, radius, start_date, end_date, subset_lt18, database, tables, id_prefix=''):
     """
     Function create_views to create temp views for all given tables with subset
         to given id/radius/dates
@@ -110,6 +110,7 @@ def create_views(defhc_id, radius, start_date, end_date, database, tables, id_pr
         radius int: input radius
         start_date str: input start_date
         end_date str: input end_date
+        subset_lt18 int: indicator for subset to lt18, = 0 or 1
         database str: name of database with all tables
         tables list: list of all tables to make to views
         id_prefix str: optional param to specify prefix on defhc_id (used for initial table creation, will be input_defhc_id), default=''   
@@ -130,7 +131,8 @@ def create_views(defhc_id, radius, start_date, end_date, database, tables, id_pr
             where {id_prefix}defhc_id = {defhc_id} and 
                   radius = {radius} and 
                   start_date = '{start_date}' and 
-                  end_date = '{end_date}'
+                  end_date = '{end_date}' and
+                  subset_lt18 = {subset_lt18}
         """)
         cnt = hive_tbl_count(f"{tbl}_vw")
         
