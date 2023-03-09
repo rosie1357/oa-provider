@@ -148,26 +148,14 @@ cnt_inpat_hosp.display()
 
 # get count of distinct facilites by firm type
 
-hco_summary = spark.sql(f"""
-    select FirmTypeName
-         , count(distinct defhc_id) as cnt_providers
+cnt_firmtypes = spark.sql(f"""
+    select count(distinct (case when FirmTypeName='Ambulatory Surgery Center' then defhc_id end)) as cnt_ascs
+         , count(distinct (case when FirmTypeName='Physician Group' then defhc_id end)) as cnt_pgs
     
     from   nearby_hcos_id_vw
     where FirmTypeName in ('Ambulatory Surgery Center', 'Physician Group')
-    
-    group by FirmTypeName
-    order by FirmTypeName
+
 """)
-
-hco_summary.display()
-
-# COMMAND ----------
-
-# extract asc and PG counts (separately)
-
-cnt_asc = hco_summary.filter(F.col('FirmTypeName')=='Ambulatory Surgery Center').withColumnRenamed('cnt_providers', 'cnt_ascs').select('cnt_ascs')
-
-cnt_pg = hco_summary.filter(F.col('FirmTypeName')=='Physician Group').withColumnRenamed('cnt_providers', 'cnt_pgs').select('cnt_pgs')
 
 # COMMAND ----------
 
@@ -179,21 +167,14 @@ cnt_pg = hco_summary.filter(F.col('FirmTypeName')=='Physician Group').withColumn
 
 # get a count of npi records by pcp_flag to get counts for spec vs pcp
 
-nearby_hcps = hive_to_df('nearby_hcps_vw')
+cnt_provs = spark.sql(f"""
+    select count(distinct (case when specialty_type='Specialist' then npi end)) as cnt_specialists
+         , count(distinct (case when specialty_type='PCP' then npi end)) as cnt_pcps
+    
+    from   nearby_hcps_vw
+    where specialty_type in ('Specialist', 'PCP')
 
-pcp_spec_summary = nearby_hcps.groupby('specialty_type') \
-                              .agg(F.count(F.col('npi')).alias('cnt_providers')) \
-                              .sort('specialty_type')
-
-pcp_spec_summary.display()
-
-# COMMAND ----------
-
-# extract pcp and spec counts (separately)
-
-cnt_spec = pcp_spec_summary.filter(F.col('specialty_type')=='Specialist').withColumnRenamed('cnt_providers', 'cnt_specialists').select('cnt_specialists')
-
-cnt_pcp = pcp_spec_summary.filter(F.col('specialty_type')=='PCP').withColumnRenamed('cnt_providers', 'cnt_pcps').select('cnt_pcps')
+""")
 
 # COMMAND ----------
 
@@ -206,10 +187,8 @@ cnt_pcp = pcp_spec_summary.filter(F.col('specialty_type')=='PCP').withColumnRena
 # combine individual counts
 
 all_counts = cnt_patient.join(cnt_inpat_hosp) \
-                        .join(cnt_pg) \
-                        .join(cnt_asc) \
-                        .join(cnt_pcp) \
-                        .join(cnt_spec) \
+                        .join(cnt_firmtypes) \
+                        .join(cnt_provs) \
                         .withColumn('defhc_name', F.lit(DEFHC_NAME))
 
 # COMMAND ----------
