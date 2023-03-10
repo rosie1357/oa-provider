@@ -12,7 +12,7 @@
 # MAGIC <br>
 # MAGIC **Description:** Program to create and save metrics for provider Facilities page <br>
 # MAGIC <br>
-# MAGIC **NOTE**: DATABASE and FAC_DATABASE params below are value extracted from database widget, value passed to GET_FAC_DATABASE() lambda func param, tbl var names specified in params
+# MAGIC **NOTE**: DATABASE param below is value extracted from database widget, FAC_DATABASE is assigned in ProviderRunClass
 # MAGIC 
 # MAGIC **Inputs**:
 # MAGIC   - {FAC_DATABASE}.input_org_info
@@ -267,11 +267,4 @@ ProvRunInstance.create_final_output(fac_discharge_sdf.filter(F.col('rank')<=10),
 
 # COMMAND ----------
 
-# finally, create final run status record for successful run
-
-ProvRunInstance.insert_run_status()
-
-# COMMAND ----------
-
-exit_notebook({'all_counts': ProvRunInstance.table_counts},
-              fail=False)
+ProvRunInstance.exit_notebook(final_nb=True)

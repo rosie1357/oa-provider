@@ -12,7 +12,7 @@
 # MAGIC <br>
 # MAGIC **Description:** Program to create and save metrics for provider dashboard <br>
 # MAGIC <br>
-# MAGIC **NOTE**: DATABASE and FAC_DATABASE params below are value extracted from database widget, value passed to GET_FAC_DATABASE() lambda func param, tbl var names specified in params
+# MAGIC **NOTE**: DATABASE param below is value extracted from database widget, FAC_DATABASE is assigned in ProviderRunClass
 # MAGIC 
 # MAGIC **Inputs**:
 # MAGIC   - {FAC_DATABASE}.input_org_info
@@ -362,5 +362,4 @@ ProvRunInstance.create_final_output(pat_visits_sdf, table=TBL_NAME)
 
 # COMMAND ----------
 
-exit_notebook({'all_counts': ProvRunInstance.table_counts},
-              fail=False)
+ProvRunInstance.exit_notebook()

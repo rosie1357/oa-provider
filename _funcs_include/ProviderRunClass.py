@@ -295,18 +295,54 @@ class ProviderRun(object):
                                               insert = False
                                              )
 
+        if self.base_output_prefix != '':
+            run_sdf = run_sdf.withColumnRenamed(f"{self.base_output_prefix}defhc_id", 'defhc_id')
+        
         populate_most_recent(sdf = run_sdf,
                              table = self.status_table,
-                             condition = self.condition_stmt())
+                             condition = self.condition_stmt(id_prefix=''))
         
         print(f"All recs for given params:")
 
         spark.sql(f"""
            select *
            from {self.status_table}
-           where {self.condition_stmt()}
+           where {self.condition_stmt(id_prefix='')}
            order by run_number
            """).display()
+        
+    def exit_notebook(self, fail_message=None, final_nb=False):
+        """
+        method exit_notebook to use to pass fail messages/params between notebooks, AND
+            if fail or end of process, update run status table
+
+        params:
+            fail_message str: optional param if want to pass fail message, if kept as None means success
+            final_nb bool: optional param to specify final notebook in run (so update run status table), default = False
+
+        returns:
+            dbutils.notebook.exit() with dictionary of return params
+
+        """
+
+        # if fail, return fail message AND update run status table with same message
+
+        if fail_message is not None:
+            notebook_return = {'message': fail_message,
+                              'fail': True}
+            
+            self.insert_run_status(success=False, fail_message=fail_message)
+
+        else:
+            notebook_return = {'message': self.table_counts}
+
+            notebook_return['fail'] = False
+            
+            # if final notebook, update run status table (set success=True)
+            if final_nb:
+                self.insert_run_status()
+                
+        return dbutils.notebook.exit(notebook_return)
         
     def test_distinct(self, sdf, name, cols, to_subset=True):
         """
@@ -343,4 +379,4 @@ class ProviderRun(object):
 
         if 'NOT Distinct' in distinct_return:
 
-            exit_notebook(f"ERROR: Duplicate records by {', '.join(cols)} in table '{name}'")
+            self.exit_notebook(fail_message = f"ERROR: Duplicate records by {', '.join(cols)} in table '{name}'")

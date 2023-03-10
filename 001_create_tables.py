@@ -13,7 +13,7 @@
 # MAGIC **Description:** Program to get metrics for input ID and create all base tables to save as tmp for later notebooks <br>
 # MAGIC <br>
 # MAGIC 
-# MAGIC **NOTE**: DATABASE and FAC_DATABASE params below are value extracted from database widget, value passed to GET_FAC_DATABASE() lambda func param, tbl var names specified in params
+# MAGIC **NOTE**: DATABASE param below is value extracted from database widget, FAC_DATABASE is assigned in ProviderRunClass
 # MAGIC 
 # MAGIC **Inputs**:
 # MAGIC   - {DATABASE}.hcp_specialty_assignment
@@ -101,7 +101,7 @@ input_org_info = spark.sql(f"""
 
 # call create final output to join to base cols and add timestamp, and insert output for insert into table
 
-TBL_NAME = f"{FAC_DATABASE}.input_org_info"
+TBL_NAME = f"{ProvRunInstance.fac_database}.input_org_info"
 
 ProvRunInstance.create_final_output(input_org_info, table=TBL_NAME)
 
@@ -121,10 +121,10 @@ try:
     INPUT_NETWORK, FIRM_TYPE = sdf_return_row_values(input_org_info, ['input_network', 'firm_type'])
     
 except IndexError:
-    exit_notebook(f"Input Definitive ID {DEFHC_ID} not found in database")
+    ProvRunInstance.exit_notebook(fail_message = f"Input Definitive ID {DEFHC_ID} not found in database")
 
 if INPUT_NETWORK is None:
-    exit_notebook(f"Input Definitive ID {DEFHC_ID} is missing parent network")
+    ProvRunInstance.exit_notebook(fail_message = f"Input Definitive ID {DEFHC_ID} is missing parent network")
     
 print(f"Input network: {INPUT_NETWORK}")
 print(f"Input firm type: {FIRM_TYPE}")
@@ -526,7 +526,7 @@ df_nearby_hcos_id2 = spark.sql(f"""
 
 # call create final output to join to base cols and add timestamp, and insert output for insert into table
 
-TBL_NAME = f"{FAC_DATABASE}.nearby_hcos_id"
+TBL_NAME = f"{ProvRunInstance.fac_database}.nearby_hcos_id"
 
 ProvRunInstance.create_final_output(df_nearby_hcos_id2, table=TBL_NAME)
 
@@ -591,7 +591,7 @@ ProvRunInstance.test_distinct(sdf = hcps_full,
 
 # call create final output to join to base cols and add timestamp, and insert output for insert into table
 
-TBL_NAME = f"{FAC_DATABASE}.nearby_hcps"
+TBL_NAME = f"{ProvRunInstance.fac_database}.nearby_hcps"
 
 ProvRunInstance.create_final_output(hcps_full.filter(F.col('nearby')==1).drop('nearby'), table=TBL_NAME)
 
@@ -656,7 +656,7 @@ ProvRunInstance.test_distinct(sdf = hcos_npi_full,
 
 # call create final output to join to base cols and add timestamp, and insert output for insert into table
 
-TBL_NAME = f"{FAC_DATABASE}.nearby_hcos_npi"
+TBL_NAME = f"{ProvRunInstance.fac_database}.nearby_hcos_npi"
 
 ProvRunInstance.create_final_output(hcos_npi_full.filter(F.col('nearby')==1).drop('nearby'), table=TBL_NAME)
 
@@ -771,7 +771,7 @@ df_mxclaims_master_fnl = df_mxclaims_master.filter(F.col('mxclaimdatekey').betwe
 
 # call create final output to join to base cols and add timestamp, and insert output for insert into table
 
-TBL_NAME = f"{FAC_DATABASE}.{MX_CLMS_TBL}"
+TBL_NAME = f"{ProvRunInstance.fac_database}.{MX_CLMS_TBL}"
 
 ProvRunInstance.create_final_output(df_mxclaims_master_fnl, table = TBL_NAME)
 
@@ -952,7 +952,7 @@ referrals_fnl = spark.sql(f"""
 
 # call create final output to join to base cols and add timestamp, and insert output for insert into table
 
-TBL_NAME = f"{FAC_DATABASE}.{PCP_REFS_TBL}"
+TBL_NAME = f"{ProvRunInstance.fac_database}.{PCP_REFS_TBL}"
 
 ProvRunInstance.create_final_output(referrals_fnl, table=TBL_NAME)
 
@@ -1223,7 +1223,7 @@ other_fac_counts_sdf = other_visits_sdf.groupby('facility_id', 'facility_name', 
 
 inpat_counts_sdf = other_counts_sdf.unionByName(readmit_counts_sdf)
 
-TBL_NAME = f"{FAC_DATABASE}.inpat90_dashboard"
+TBL_NAME = f"{ProvRunInstance.fac_database}.inpat90_dashboard"
 
 ProvRunInstance.create_final_output(inpat_counts_sdf, table = TBL_NAME)
 
@@ -1256,7 +1256,7 @@ inpat_fac_counts_sdf = other_fac_counts_sdf.unionByName(readmit_fac_counts_sdf) 
 
 # call create final output to join to base cols and add timestamp, and insert output for insert into table
 
-TBL_NAME = f"{FAC_DATABASE}.inpat90_facilities"
+TBL_NAME = f"{ProvRunInstance.fac_database}.inpat90_facilities"
 
 ProvRunInstance.create_final_output(inpat_fac_counts_sdf, table=TBL_NAME)
 
@@ -1280,8 +1280,7 @@ rm_checkpoints(CHECKPOINT_DIR)
 # create exit function to run either before QC checks or after based on RUN_QC
 
 def exit():
-    exit_notebook({'all_counts': ProvRunInstance.table_counts},
-                  fail=False)
+    ProvRunInstance.exit_notebook()
 
 # COMMAND ----------
 
@@ -1298,7 +1297,7 @@ if RUN_QC==0:
 
 # HCO IDs: freq of firm type
 
-sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcos_id"), ['FirmTypeName'])
+sdf_frequency(hive_to_df(f"{ProvRunInstance.fac_database}.nearby_hcos_id"), ['FirmTypeName'])
 
 # COMMAND ----------
 
@@ -1306,21 +1305,21 @@ sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcos_id"), ['FirmTypeName'])
 
 sdf_frequency(hcp_affs_net, ['primary_affiliation', 'secondary_affiliation', 'affiliation_2cat', 'affiliation_4cat'], order='cols')
 
-sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcps"), ['specialty_type', 'PrimarySpecialty'], order='cols', maxobs=100)
+sdf_frequency(hive_to_df(f"{ProvRunInstance.fac_database}.nearby_hcps"), ['specialty_type', 'PrimarySpecialty'], order='cols', maxobs=100)
 
 # COMMAND ----------
 
 # HCO NPIs: creation of network_flag, facility type from firm type
 
-sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcos_npi"), ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', with_pct=True, maxobs=100)
+sdf_frequency(hive_to_df(f"{ProvRunInstance.fac_database}.nearby_hcos_npi"), ['network_flag', 'net_defhc_id', 'net_defhc_name'], order='cols', with_pct=True, maxobs=100)
 
-sdf_frequency(hive_to_df(f"{FAC_DATABASE}.nearby_hcos_npi"), ['FirmTypeName', 'facility_type'], order='cols')
+sdf_frequency(hive_to_df(f"{ProvRunInstance.fac_database}.nearby_hcos_npi"), ['FirmTypeName', 'facility_type'], order='cols')
 
 # COMMAND ----------
 
 # CLAIMS: look at % null for joined on cols
 
-sdf_claims = hive_to_df(f"{FAC_DATABASE}.{MX_CLMS_TBL}")
+sdf_claims = hive_to_df(f"{ProvRunInstance.fac_database}.{MX_CLMS_TBL}")
 
 COLS = ['defhc_id', 'net_defhc_id']
 
@@ -1344,7 +1343,7 @@ sdf_frequency(sdf_claims, ['nearby_prov'], with_pct=True)
 
 # REFERRALS: crosstab of all indicators
 
-sdf_frequency(hive_to_df(f"{FAC_DATABASE}.{PCP_REFS_TBL}"), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
+sdf_frequency(hive_to_df(f"{ProvRunInstance.fac_database}.{PCP_REFS_TBL}"), ['nearby_pcp', 'nearby_spec', 'nearby_fac_pcp', 'nearby_fac_spec'], order='cols', with_pct=True)
 
 # COMMAND ----------
 
