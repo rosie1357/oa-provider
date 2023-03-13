@@ -35,7 +35,6 @@
 
 # COMMAND ----------
 
-import pandas as pd
 import pyspark.sql.functions as F
 
 # COMMAND ----------
@@ -196,7 +195,7 @@ hosp_asc_pie = get_top_values(intable = 'mxclaims_master_vw',
                                defhc_value = ProvRunInstance.input_network,
                                max_row = 4,
                                strat_cols=['pos_cat'],
-                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
+                               subset=f"where {HOSP_ASC_HOPD_SUBSET}") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 
 hosp_asc_pie.createOrReplaceTempView('hosp_asc_pie_vw')
@@ -250,7 +249,7 @@ hosp_asc_bar = get_top_values(intable = 'mxclaims_master_vw',
                                defhc_value = DEFHC_ID,
                                max_row = 5,
                                strat_cols=['pos_cat'],
-                               subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
+                               subset=f"where {HOSP_ASC_HOPD_SUBSET}") \
               .withColumnRenamed('pos_cat', 'place_of_service')
 
 # COMMAND ----------
