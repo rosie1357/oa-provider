@@ -12,7 +12,7 @@
 # MAGIC <br>
 # MAGIC **Description:** Program to create and save metrics for provider Facilities page <br>
 # MAGIC <br>
-# MAGIC **NOTE**: DATABASE and FAC_DATABASE params below are value extracted from database widget, value passed to GET_FAC_DATABASE() lambda func param, tbl var names specified in params
+# MAGIC **NOTE**: DATABASE param below is value extracted from database widget, FAC_DATABASE is assigned in ProviderRunClass
 # MAGIC 
 # MAGIC **Inputs**:
 # MAGIC   - {FAC_DATABASE}.input_org_info
@@ -34,47 +34,17 @@
 
 # COMMAND ----------
 
-import pandas as pd
-
-from functools import partial
+# create all widgets
+ 
+RUN_VALUES = get_widgets()
 
 # COMMAND ----------
 
-# setup: 
-#  create/get widget values, assign fac database and network, create views
-
-RUN_VALUES = get_widgets()
+# get widget values and use to create instance of provider run class
 
 DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'SUBSET_LT18', 'DATABASE', 'RUN_QC'])
 
-FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
-
-create_views(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, FAC_DATABASE, ALL_TABLES, id_prefix='input_')
-
-INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df('input_org_info_vw'), ['input_network', 'defhc_name'])
-
-# create dictionary of counts to fill in for each table insert and return on pass
-
-COUNTS_DICT = {}
-
-# COMMAND ----------
-
-# create base df to create partial for create_final_output function
-
-base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
-create_final_output_func = partial(create_final_output, base_sdf)
-
-# create partial for insert_into_output function
-
-insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
-
-# create partial for save to s3
-
-upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
-
-# create partial for test_distinct func
-
-test_distinct_func = partial(test_distinct, DEFHC_ID, RADIUS, START_DATE, END_DATE)
+ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC)
 
 # COMMAND ----------
 
@@ -98,19 +68,13 @@ facilities_sdf = spark.sql(f"""
               primary=1
     """)
 
-sdf_frequency(facilities_sdf, ['facility_type'], order='cols')
-
 # COMMAND ----------
 
 # call create final output to join to base cols and add timestamp, and insert output for insert into table, load to s3
 
 TBL_NAME = f"{DATABASE}.page5_facility_map"
 
-page5_facility_map = create_final_output_func(facilities_sdf)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_facility_map, TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(facilities_sdf, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -125,7 +89,7 @@ upload_to_s3_func(TBL_NAME)
 
 market_pie = get_top_values(intable = 'mxclaims_master_vw',
                             defhc = 'net_defhc',
-                            defhc_value = INPUT_NETWORK,
+                            defhc_value = ProvRunInstance.input_network,
                             max_row = 4,
                             strat_cols=['facility_type'],
                             subset="where facility_type is not null"
@@ -161,11 +125,7 @@ market_pie = spark.sql(f"""
 
 TBL_NAME = f"{DATABASE}.page5_market_share"
 
-page5_market_share = create_final_output_func(market_pie)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_market_share.sort('facility_type', 'network_label'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(market_pie, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -207,11 +167,11 @@ fac_ranked_sdf.sort('facility_type','rank').display()
 
 # confirm distinct by facility_id
 
-test_distinct_func(sdf = fac_ranked_sdf,
-                   name = 'Facilities for Top 10 Chart',
-                   cols = ['facility_id'],
-                   to_subset = False
-                  )
+ProvRunInstance.test_distinct(sdf = fac_ranked_sdf,
+                              name = 'Facilities for Top 10 Chart',
+                              cols = ['facility_id'],
+                              to_subset = False
+                              )
 
 # COMMAND ----------
 
@@ -219,11 +179,7 @@ test_distinct_func(sdf = fac_ranked_sdf,
 
 TBL_NAME = f"{DATABASE}.page5_top10_fac"
 
-page5_top10 = create_final_output_func(fac_ranked_sdf.filter(F.col('rank')<=10))
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_top10.sort('facility_type','rank'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(fac_ranked_sdf.filter(F.col('rank')<=10), table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -274,11 +230,7 @@ pcp_ranked_sdf = spark.sql(f"""
 
 TBL_NAME = f"{DATABASE}.page5_top10_pcp"
 
-page5_top10_pcp = create_final_output_func(pcp_ranked_sdf.filter(F.col('rank')<=10))
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_top10_pcp.sort('facility_type','facility_id', 'rank'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(pcp_ranked_sdf.filter(F.col('rank')<=10), table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -311,13 +263,8 @@ fac_discharge_sdf = spark.sql("""
 
 TBL_NAME = f"{DATABASE}.page5_top10_postdis"
 
-page5_top10_postdis = create_final_output_func(fac_discharge_sdf.filter(F.col('rank')<=10))
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page5_top10_postdis.sort('facility_id', 'rank'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(fac_discharge_sdf.filter(F.col('rank')<=10), table=TBL_NAME)
 
 # COMMAND ----------
 
-exit_notebook({'all_counts': COUNTS_DICT},
-              fail=False)
+ProvRunInstance.exit_notebook(final_nb=True)

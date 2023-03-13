@@ -17,10 +17,6 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./credentials
-
-# COMMAND ----------
-
 # MAGIC %run ./geo_funcs
 
 # COMMAND ----------
@@ -34,3 +30,7 @@
 # COMMAND ----------
 
 # MAGIC %run ./test_funcs
+
+# COMMAND ----------
+
+# MAGIC %run ./ProviderRunClass

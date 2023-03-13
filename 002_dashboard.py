@@ -12,7 +12,7 @@
 # MAGIC <br>
 # MAGIC **Description:** Program to create and save metrics for provider dashboard <br>
 # MAGIC <br>
-# MAGIC **NOTE**: DATABASE and FAC_DATABASE params below are value extracted from database widget, value passed to GET_FAC_DATABASE() lambda func param, tbl var names specified in params
+# MAGIC **NOTE**: DATABASE param below is value extracted from database widget, FAC_DATABASE is assigned in ProviderRunClass
 # MAGIC 
 # MAGIC **Inputs**:
 # MAGIC   - {FAC_DATABASE}.input_org_info
@@ -38,45 +38,23 @@
 import pandas as pd
 import pyspark.sql.functions as F
 
-from functools import partial
-
 # COMMAND ----------
 
 # MAGIC %run ./_funcs_include/all_provider_funcs
 
 # COMMAND ----------
 
-# setup: 
-#  create/get widget values, assign fac database and network, create views
-
+# create all widgets
+ 
 RUN_VALUES = get_widgets()
-
-DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'SUBSET_LT18', 'DATABASE', 'RUN_QC'])
-
-FAC_DATABASE = GET_FAC_DATABASE(DATABASE, DEFHC_ID)
-
-create_views(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, FAC_DATABASE, ALL_TABLES, id_prefix='input_')
-
-INPUT_NETWORK, DEFHC_NAME = sdf_return_row_values(hive_to_df('input_org_info_vw'), ['input_network', 'defhc_name'])
-
-# create dictionary of counts to fill in for each table insert and return on pass
-
-COUNTS_DICT = {}
 
 # COMMAND ----------
 
-# create base df to create partial for create_final_output function
+# get widget values and use to create instance of provider run class
 
-base_sdf = base_output_table(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
-create_final_output_func = partial(create_final_output, base_sdf)
+DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC = return_widget_values(RUN_VALUES, ['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'SUBSET_LT18', 'DATABASE', 'RUN_QC'])
 
-# create partial for insert_into_output function
-
-insert_into_output_func = partial(insert_into_output, DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18)
-
-# create partial for save to s3
-
-upload_to_s3_func = partial(csv_upload_s3, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
+ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT18, DATABASE, RUN_QC)
 
 # COMMAND ----------
 
@@ -197,11 +175,7 @@ all_counts = cnt_patient.join(cnt_inpat_hosp) \
 
 TBL_NAME = f"{DATABASE}.page1_toplevel_counts"
 
-page1_toplevel_counts = create_final_output_func(all_counts)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_toplevel_counts, TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(all_counts, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -219,7 +193,7 @@ upload_to_s3_func(TBL_NAME)
 
 hosp_asc_pie = get_top_values(intable = 'mxclaims_master_vw',
                                defhc = 'net_defhc',
-                               defhc_value = INPUT_NETWORK,
+                               defhc_value = ProvRunInstance.input_network,
                                max_row = 4,
                                strat_cols=['pos_cat'],
                                subset="where (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or (pos_cat='Hospital Inpatient' and facility_type='Hospital')") \
@@ -261,11 +235,7 @@ hosp_asc_pie = spark.sql(f"""
 
 TBL_NAME = f"{DATABASE}.page1_hosp_asc_pie"
 
-page1_hosp_asc_pie = create_final_output_func(hosp_asc_pie)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_hosp_asc_pie.sort('place_of_service', 'network_label'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(hosp_asc_pie, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -300,11 +270,7 @@ page1_hosp_asc_bar = hosp_asc_bar.filter(F.col('defhc_id_collapsed').isNotNull()
                                   .select('place_of_service', 'facility_label', 'facility_name', 'cnt_claims') \
                                   .withColumnRenamed('cnt_claims', 'count')
 
-page1_hosp_asc_bar = create_final_output_func(page1_hosp_asc_bar)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_hosp_asc_bar.sort('place_of_service', 'facility_label'), f"{DATABASE}.page1_hosp_asc_bar")
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(page1_hosp_asc_bar, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -337,11 +303,7 @@ aff_specs = spark.sql(f"""
 
 TBL_NAME = f"{DATABASE}.page1_aff_spec_loyalty"
 
-page1_aff_spec_loyalty = create_final_output_func(aff_specs)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_aff_spec_loyalty.sort('network_flag'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(aff_specs, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -369,11 +331,7 @@ pcp_referrals = spark.sql(f"""
 
 TBL_NAME = f"{DATABASE}.page1_pcp_referrals"
 
-page1_pcp_referrals = create_final_output_func(pcp_referrals)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_pcp_referrals.sort('network_flag'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(pcp_referrals, table=TBL_NAME)
 
 # COMMAND ----------
 
@@ -400,13 +358,8 @@ pat_visits_sdf = spark.sql("""
 
 TBL_NAME = f"{DATABASE}.page1_vis90_inpat_stay"
 
-page1_vis90_inpat_stay = create_final_output_func(pat_visits_sdf)
-
-COUNTS_DICT[TBL_NAME] = insert_into_output_func(page1_vis90_inpat_stay.sort('network_flag', 'place_of_service'), TBL_NAME)
-
-upload_to_s3_func(TBL_NAME)
+ProvRunInstance.create_final_output(pat_visits_sdf, table=TBL_NAME)
 
 # COMMAND ----------
 
-exit_notebook({'all_counts': COUNTS_DICT},
-              fail=False)
+ProvRunInstance.exit_notebook()
