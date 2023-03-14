@@ -54,7 +54,7 @@ ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT1
 
 # COMMAND ----------
 
-# subset nearby NPIs to non-null facility type and keep address info, look at count of facilities kept
+# subset nearby NPIs to non-null facility type, primary locations only
 
 facilities_sdf = spark.sql(f"""
         select distinct defhc_id as facility_id

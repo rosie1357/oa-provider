@@ -166,7 +166,7 @@ cnt_provs = spark.sql(f"""
 all_counts = cnt_patient.join(cnt_inpat_hosp) \
                         .join(cnt_firmtypes) \
                         .join(cnt_provs) \
-                        .withColumn('defhc_name', F.lit(DEFHC_NAME))
+                        .withColumn('defhc_name', F.lit(ProvRunInstance.defhc_name))
 
 # COMMAND ----------
 
