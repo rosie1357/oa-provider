@@ -70,7 +70,7 @@ def get_top_values(intable, defhc, defhc_value, max_row, strat_cols, subset=''):
 
            from (
                 select {defhc}_id
-                       , {defhc}_name as
+                       , {defhc}_name
                        , {strat_cols}
                        , count(*) as cnt_claims
 
