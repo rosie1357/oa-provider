@@ -157,7 +157,7 @@ hcos_npi = spark.sql(f"""
         select cast(o.NPI as int) as NPI
              , p.DefinitiveId as defhc_id 
              , p.NetworkDefinitiveId
-             , case when p.DefinitiveId = {DEFHC_ID} then concat('*', p.ProfileName, '*') 
+             , case when p.DefinitiveId = {DEFHC_ID} then concat('*', p.ProfileName) 
                     else p.ProfileName
                     end as defhc_name
                     
@@ -175,8 +175,8 @@ hcos_npi = spark.sql(f"""
                     else coalesce(p.NetworkParentDefinitiveID, p.NetworkDefinitiveId)
                     end as net_defhc_id
                     
-            , case when p.NetworkDefinitiveId = {INPUT_NETWORK} then concat('*', p.NetworkName, '*') 
-                   when p.NetworkParentDefinitiveID = {INPUT_NETWORK} then concat('*', p.NetworkParentName, '*') 
+            , case when p.NetworkDefinitiveId = {INPUT_NETWORK} then concat('*', p.NetworkName) 
+                   when p.NetworkParentDefinitiveID = {INPUT_NETWORK} then concat('*', p.NetworkParentName) 
             
                    else coalesce(p.NetworkParentName, p.NetworkName)
                    end as net_defhc_name
@@ -512,7 +512,7 @@ df_nearby_hcos_npi.createOrReplaceTempView('df_nearby_hcos_npi_vw')
 
 df_nearby_hcos_id2 = spark.sql(f"""
     select no.*
-         , case when defhc_id = {DEFHC_ID} then concat('*', pf.ProfileName, '*') 
+         , case when defhc_id = {DEFHC_ID} then concat('*', pf.ProfileName) 
                     else pf.ProfileName
                     end as defhc_name
          , pf.FirmTypeName
