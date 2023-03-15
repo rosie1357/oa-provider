@@ -36,7 +36,8 @@ class ProviderRun(object):
                  base_output_prefix = '', 
                  db_tables = ALL_TABLES,
                  counts_table = COUNTS_TBL,
-                 status_table = STATUS_TBL):
+                 status_table = STATUS_TBL,
+                 return_fac_db = GET_FAC_DATABASE):
         
         self.defhc_id = defhc_id
         self.radius = radius
@@ -52,7 +53,7 @@ class ProviderRun(object):
         self.status_table = f"{self.database}.{status_table}"
         
         # create name for facility-specific database
-        self.fac_database = f"{self.database}_{self.defhc_id}"
+        self.fac_database = return_fac_db(self.database, self.defhc_id)
         
         # create base output table to join all other outputs to
         self.base_output_table = self.base_output_table()

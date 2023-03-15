@@ -39,6 +39,10 @@ STATUS_TBL = 'run_status'
 
 # COMMAND ----------
 
+GET_FAC_DATABASE = lambda db, id: f"{db}_{id}"
+
+# COMMAND ----------
+
 NEW_STAY_DAYS_CUTOFF = 7
 
 # COMMAND ----------
