@@ -247,6 +247,7 @@ fac_discharge_sdf = spark.sql("""
     select facility_id
            ,defhc_id as discharge_facility_id
            ,defhc_name as discharge_facility_name
+           ,defhc_fac_type as discharge_facility_type
            ,count
            ,row_number() over (partition by facility_id
                                 order by count desc)

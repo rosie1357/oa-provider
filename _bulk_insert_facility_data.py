@@ -50,7 +50,6 @@ INPUTS_DF = spark.sql(f"""select distinct DEFHC_ID, RADIUS, START_DATE, END_DATE
 
 for index, row in INPUTS_DF.iterrows():
 
-
     DEFHC_ID, RADIUS, START_DATE, END_DATE, LT18, SORT = row[['DEFHC_ID', 'RADIUS', 'START_DATE', 'END_DATE', 'LT18', 'SORT']]
     process_stmt = lambda n, x: '\n' + f"{n}: {x} run for ID {DEFHC_ID}, radius = {RADIUS}, {START_DATE} - {END_DATE}, <18 filter = {LT18}"
 

@@ -158,6 +158,12 @@ class ProviderRun(object):
 
         """
         
+        # create modify boolean, for chart instances only, the table to insert into must exist, otherwise can create with first run
+        # (this will be for tables in ID-specific database)
+        
+        if self.charts_instance == False:
+            must_exist=False
+        
         # create view from sdf
 
         sdf.createOrReplaceTempView('sdf_vw')
