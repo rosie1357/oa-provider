@@ -142,6 +142,8 @@ print(f"Input firm type: {FIRM_TYPE}")
   to determine network to assign, we will use a two-step process:
       -- if EITHER NetworkDefinitiveId OR NetworkParentDefinitiveID (network or parent network) == input network, assign input network
       -- otherwise, assign network as coalesce(NetworkParentDefinitiveID, NetworkDefinitiveId), to prioritize parent if assigned, otherwise use network
+      
+  for given facility and given network, surround facility/network name in asterisks
 
 """
 
@@ -155,7 +157,10 @@ hcos_npi = spark.sql(f"""
         select cast(o.NPI as int) as NPI
              , p.DefinitiveId as defhc_id 
              , p.NetworkDefinitiveId
-             , p.ProfileName as defhc_name
+             , case when p.DefinitiveId = {DEFHC_ID} then concat('*', p.ProfileName) 
+                    else p.ProfileName
+                    end as defhc_name
+                    
              , p.NetworkName
              , p.NetworkParentDefinitiveID
              , p.NetworkParentName
@@ -170,12 +175,9 @@ hcos_npi = spark.sql(f"""
                     else coalesce(p.NetworkParentDefinitiveID, p.NetworkDefinitiveId)
                     end as net_defhc_id
                     
-            , case when p.NetworkDefinitiveId = {INPUT_NETWORK}
-                   then p.NetworkName
-                   
-                   when p.NetworkParentDefinitiveID = {INPUT_NETWORK}
-                   then p.NetworkParentName
-                   
+            , case when p.NetworkDefinitiveId = {INPUT_NETWORK} then concat('*', p.NetworkName) 
+                   when p.NetworkParentDefinitiveID = {INPUT_NETWORK} then concat('*', p.NetworkParentName) 
+            
                    else coalesce(p.NetworkParentName, p.NetworkName)
                    end as net_defhc_name
 
@@ -505,11 +507,14 @@ df_nearby_hcos_npi.createOrReplaceTempView('df_nearby_hcos_npi_vw')
 
 # COMMAND ----------
 
-# join nearby_hcos to d_profile to get firm and facility type
+# join nearby_hcos to d_profile to get firm and facility type,
+# put asterisk around defhc_name if given facility (note currently not using this functionality to print out names, but including for posterity)
 
 df_nearby_hcos_id2 = spark.sql(f"""
     select no.*
-         , pf.ProfileName as defhc_name
+         , case when defhc_id = {DEFHC_ID} then concat('*', pf.ProfileName) 
+                    else pf.ProfileName
+                    end as defhc_name
          , pf.FirmTypeName
          , pf.FacilityTypeName
         

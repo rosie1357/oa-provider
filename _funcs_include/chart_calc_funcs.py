@@ -68,12 +68,9 @@ def get_top_values(intable, defhc, defhc_value, max_row, strat_cols, subset=''):
                                                                end desc) 
                           end as rn
 
-                  ,case when {defhc}_id = {defhc_value} then concat('*', {defhc}_name_raw, '*') 
-                        else {defhc}_name_raw
-                        end as {defhc}_name
            from (
                 select {defhc}_id
-                       , {defhc}_name as {defhc}_name_raw
+                       , {defhc}_name
                        , {strat_cols}
                        , count(*) as cnt_claims
 

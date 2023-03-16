@@ -59,8 +59,12 @@ page3_top_sdf = spark.sql(f"""
            ,rendering_npi_url as npi_url
            ,specialty_cat
            ,affiliation_2cat
+           
            ,sum(case when network_flag = 'In-Network' then 1 else 0 end) as count_in_network
            ,sum(case when network_flag = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
+           
+           ,sum(case when network_flag = 'In-Network' and {HOSP_ASC_HOPD_SUBSET} then 1 else 0 end) as count_in_network_hosp_asc
+           ,sum(case when network_flag = 'Out-of-Network' and {HOSP_ASC_HOPD_SUBSET} then 1 else 0 end) as count_out_of_network_hosp_asc
            
    from mxclaims_master_vw
    where specialty_type = 'Specialist'
@@ -99,10 +103,8 @@ page3_shares_sdf = spark.sql(f"""
            ,count(*) as count
            
    from mxclaims_master_vw
-   where ( (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or
-           (pos_cat='Hospital Inpatient' and facility_type='Hospital') 
-          ) and 
-          specialty_type = 'Specialist'
+   where {HOSP_ASC_HOPD_SUBSET} and 
+         specialty_type = 'Specialist'
          
    group by net_defhc_id
            ,net_defhc_name
