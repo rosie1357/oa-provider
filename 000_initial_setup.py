@@ -249,7 +249,9 @@ schema = create_empty_output({'npi': IntegerType(),
                               'specialty_cat': StringType(),
                               'affiliation_2cat': StringType(),
                               'count_in_network': IntegerType(),
-                              'count_out_of_network': IntegerType()
+                              'count_out_of_network': IntegerType(),
+                              'count_in_network_hosp_asc': IntegerType(),
+                              'count_out_of_network_hosp_asc': IntegerType()
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.page3_top_panel_specialists")

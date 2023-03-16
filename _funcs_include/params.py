@@ -51,6 +51,18 @@ spark.sparkContext.setCheckpointDir(CHECKPOINT_DIR)
 
 # COMMAND ----------
 
+# create string to use in multiple charts to subset to hospital/ASC/HOPD claims
+
+HOSP_ASC_HOPD_SUBSET = """
+    (
+     (pos_cat='ASC & HOPD' and facility_type in ('Ambulatory Surgery Center', 'Hospital')) or
+     (pos_cat='Hospital Inpatient' and facility_type='Hospital') 
+    )
+
+"""
+
+# COMMAND ----------
+
 def network_flag(network_col, network_value, suffix=''):
     """
     Function network_flag() to create col network_flag based on network col name and literal value
