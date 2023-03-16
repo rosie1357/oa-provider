@@ -414,6 +414,7 @@ pyspark_to_hive(schema, f"{DATABASE}.page5_top10_pcp")
 schema = create_empty_output({'facility_id':  StringType(),
                               'discharge_facility_id':  StringType(),
                               'discharge_facility_name': StringType(),
+                              'discharge_facility_type': StringType(),
                               'count': IntegerType(),
                               'rank': IntegerType()
                              })

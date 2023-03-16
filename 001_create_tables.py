@@ -703,26 +703,27 @@ create_age_stmt = """ case when PatientBirthYearNum != 9999 then MxClaimYear - P
 
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
-           mc.DHCClaimId
-        ,  mc.ClaimTypeCd
-        ,  mc.MxClaimYear
-        ,  mc.MxClaimMonth
-        ,  to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') as mxclaimdatekey
-        ,  mc.PatientId 
-        ,  mc.PlaceOfServiceCd
-        ,  mc.PatientClaimZip3Cd as patient_zip3
-        ,  mc.RenderingProviderNPI 
-        ,  mc.BillingProviderNPI 
-        ,  mc.FacilityNPI 
-        ,  {create_age_stmt}
+          mc.DHCClaimId
+        , mc.ClaimTypeCd
+        , mc.MxClaimYear
+        , mc.MxClaimMonth
+        , to_date(cast(mc.MxClaimDateKey as string), 'yyyyMMdd') as mxclaimdatekey
+        , mc.PatientId 
+        , mc.PlaceOfServiceCd
+        , mc.PatientClaimZip3Cd as patient_zip3
+        , mc.RenderingProviderNPI 
+        , mc.BillingProviderNPI 
+        , mc.FacilityNPI 
+        , {create_age_stmt}
         
-        ,  np.zip 
-        ,  np.defhc_id 
-        ,  np.net_defhc_id
-        ,  np.defhc_name
-        ,  np.net_defhc_name
-        ,  np.network_flag
-        ,  np.facility_type
+        , np.zip 
+        , np.defhc_id 
+        , np.net_defhc_id
+        , np.defhc_name
+        , np.net_defhc_name
+        , np.network_flag
+        , np.facility_type
+        , np.FirmTypeName as defhc_fac_type
         
         , prov.PrimarySpecialty
         , prov.ProviderName
@@ -767,10 +768,10 @@ if SUBSET_LT18 == 1:
 
 # COMMAND ----------
 
-# subset perm claims table to given time frame, drop patient_age (not needed anymore)
+# subset perm claims table to given time frame, drop patient_age (not needed anymore) and defhc_fac_type (only used below for inpatient stays)
 
 df_mxclaims_master_fnl = df_mxclaims_master.filter(F.col('mxclaimdatekey').between(START_DATE, END_DATE)) \
-                                           .drop('patient_age')
+                                           .drop('patient_age', 'defhc_fac_type')
 
 # COMMAND ----------
 
@@ -988,7 +989,7 @@ ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
 # keep needed cols and checkpoint the table, creating view to use for creation of stays and visits post-90
 
 mxclaims_p90_sdf = df_mxclaims_master.select('DHCClaimId', 'MxClaimYear', 'MxClaimMonth', 'mxclaimdatekey', 'patientid', 'defhc_id',
-                                             'defhc_name', 'network_flag', 'pos_cat', 'facility_type') \
+                                             'defhc_name', 'network_flag', 'pos_cat', 'facility_type', 'defhc_fac_type') \
                                      .checkpoint()
 
 mxclaims_p90_sdf.createOrReplaceTempView('mxclaims_p90_vw')
@@ -1012,6 +1013,7 @@ inpat_claims_sdf = spark.sql(f"""
             ,  mxclaimdatekey as claim_date
             ,  defhc_id
             ,  defhc_name
+            ,  defhc_fac_type
             ,  network_flag
 
             ,  min_service_from
@@ -1087,7 +1089,7 @@ inpat_claims_sdf2 = inpat_claims_sdf.withColumn('lag_end_date', F.lag('claim_end
 # create indicator for stays to include in baseline (stay_end_date on or before END_DATE) checkpoint table
 # create unique stay_id (combo of patientid, defhc_id and stay_number)
 
-inpat_stays_sdf = inpat_claims_sdf2.select('patientid', 'defhc_id', 'defhc_name', 'network_flag', 'stay_number', 'stay_start_date', 'stay_end_date') \
+inpat_stays_sdf = inpat_claims_sdf2.select('patientid', 'defhc_id', 'defhc_name', 'defhc_fac_type', 'network_flag', 'stay_number', 'stay_start_date', 'stay_end_date') \
                                    .distinct() \
                                    .withColumn('include_baseline', F.when(F.col('stay_end_date').between(START_DATE, END_DATE), 1).otherwise(0)) \
                                    .withColumn('stay_id', F.concat_ws('_', F.col('patientid'), F.col('defhc_id'), F.col('stay_number'))) \
@@ -1118,6 +1120,7 @@ readmit_visits_sdf = spark.sql(f"""
                ,b.network_flag
                ,b.defhc_id
                ,b.defhc_name
+               ,b.defhc_fac_type
                
                ,a.stay_start_date
                ,a.stay_end_date
@@ -1152,9 +1155,9 @@ readmit_counts_sdf = readmit_visits_sdf.groupby('network_flag') \
 
 # COMMAND ----------
 
-# for top 10 facilities: roll up by facility_id/facility_name (input facilities), and defhc_id/defhc_name (post-discharge facilities)
+# for top 10 facilities: roll up by facility_id/facility_name (input facilities), and defhc_id/defhc_name/defhc_fac_type (post-discharge facilities)
 
-readmit_fac_counts_sdf = readmit_visits_sdf.groupby('facility_id', 'facility_name', 'defhc_id', 'defhc_name') \
+readmit_fac_counts_sdf = readmit_visits_sdf.groupby('facility_id', 'facility_name', 'defhc_id', 'defhc_name', 'defhc_fac_type') \
                                            .agg(F.countDistinct(F.col('stay_id')).alias('count'))
 
 # COMMAND ----------
@@ -1178,6 +1181,7 @@ other_visits_sdf = spark.sql(f"""
                ,b.network_flag
                ,b.defhc_id
                ,b.defhc_name
+               ,b.defhc_fac_type
                
                ,coalesce(b.pos_cat, 'Other') as place_of_service
                ,b.facility_type
@@ -1209,9 +1213,9 @@ other_counts_sdf = other_visits_sdf.groupby('place_of_service', 'network_flag') 
 
 # COMMAND ----------
 
-# for top 10 facilities: roll up by facility_id/facility_name (input facilities), and defhc_id/defhc_name (post-discharge facilities)
+# for top 10 facilities: roll up by facility_id/facility_name (input facilities), and defhc_id/defhc_name/defhc_fac_type (post-discharge facilities)
 
-other_fac_counts_sdf = other_visits_sdf.groupby('facility_id', 'facility_name', 'defhc_id', 'defhc_name') \
+other_fac_counts_sdf = other_visits_sdf.groupby('facility_id', 'facility_name', 'defhc_id', 'defhc_name', 'defhc_fac_type') \
                                        .agg(F.countDistinct(F.col('DHCClaimId')).alias('count'))
 
 # COMMAND ----------
@@ -1254,7 +1258,7 @@ ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
 #   (the same destination facility could have inpatient and non-inpatient POS values, so could show up on both )
 
 inpat_fac_counts_sdf = other_fac_counts_sdf.unionByName(readmit_fac_counts_sdf) \
-                                           .groupby('facility_id', 'facility_name', 'defhc_id', 'defhc_name') \
+                                           .groupby('facility_id', 'facility_name', 'defhc_id', 'defhc_name', 'defhc_fac_type') \
                                            .agg(F.sum(F.col('count')).alias('count'))
 
 # COMMAND ----------

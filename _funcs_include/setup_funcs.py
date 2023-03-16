@@ -74,8 +74,13 @@ def get_widgets(include_widgets = list(range(1,8))):
     
                     8: {'name': "(8) Input Table",
                        'default': "",
-                       'var': 'INPUT_TABLES',
-                       'clean_func': lambda x: x}
+                       'var': 'INPUT_TABLE',
+                       'clean_func': lambda x: x},
+                   
+                   9: {'name': "(9) Rerun Existing",
+                       'default': "1",
+                       'var': 'RERUN_EXISTING',
+                       'clean_func': lambda x: int(x)}
                   }
     
     for w_num in include_widgets:
@@ -97,3 +102,33 @@ def return_widget_values(widget_dict, vars):
         returns += [widget_dict[var][1]]
         
     return tuple(returns)
+
+# COMMAND ----------
+
+def return_run_status(db, tbl, defhc_id, radius, start_date, end_date, lt18):
+    """
+    Function return_run_status to take in given set of params and return tuple with success and current_dt values
+    params:
+        db str: name of database
+        tbl str: name of table with run status
+        defhc_id int: facility ID
+        radius int: radius (miles)
+        start_date str: start date in form of YYYY-MM-DD
+        end_date str: end date in form of YYYY-MM-DD
+        lt18 int: indicator to subset to lt18 (0/1)
+        
+    returns:
+        tuple with success, current_dt values IF record found
+        if zero records found, print message and return tuple of None, None
+    
+    """
+    
+    status = spark.sql(f"""select success, current_dt from {db}.{tbl} 
+                           where defhc_id={defhc_id} and radius={radius} and start_date='{start_date}' and end_date='{end_date}' and subset_lt18={lt18}
+                           order by current_dt desc
+                           limit 1
+                       """).collect()
+    if len(status) == 0:
+        return None, None
+    
+    return status[0]['success'], status[0]['current_dt']
