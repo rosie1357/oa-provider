@@ -801,6 +801,7 @@ ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
 referrals = spark.sql(f"""
         select a.*
              , pos.pos_cat as rend_pos_cat
+             , pos2.pos_cat as ref_pos_cat
              , {create_age_stmt}
              
        from (
@@ -814,6 +815,7 @@ referrals = spark.sql(f"""
                ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_fac_npi
                ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_fac_npi
                ,   rend_pos
+               ,   ref_pos
                ,   patient_birth_year as PatientBirthYearNum
             from   {DATABASE}.explicit_referrals 
             where  rend_claim_date between '{START_DATE}' and '{END_DATE}'
@@ -829,6 +831,7 @@ referrals = spark.sql(f"""
                ,   coalesce(rend_fac_npi, rend_bill_npi) as rend_fac_npi
                ,   coalesce(ref_fac_npi, ref_bill_npi) as ref_fac_npi
                ,   rend_pos
+               ,   ref_pos
                ,   patient_birth_year as PatientBirthYearNum
             from   {DATABASE}.implicit_referrals_pcp_specialist
             where  rend_claim_date between '{START_DATE}' and '{END_DATE}'
@@ -837,6 +840,9 @@ referrals = spark.sql(f"""
         
         left   join {DATABASE}.pos_category_assign pos
         on     a.rend_pos = pos.PlaceOfServiceCd
+        
+        left   join {DATABASE}.pos_category_assign pos2
+        on     a.ref_pos = pos2.PlaceOfServiceCd
         
         
     """)
@@ -866,6 +872,8 @@ referrals1 = spark.sql(f"""
          , patient_id
          , rend_pos
          , rend_pos_cat
+         , ref_pos
+         , ref_pos_cat
         
         , ref_npi as npi_pcp
         , ref_fac_npi as npi_fac_pcp
