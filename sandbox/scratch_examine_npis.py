@@ -1,5 +1,5 @@
 # Databricks notebook source
-# scratch notebook to examine specific NPIs marked as high % of in/out-of-network for 
+# scratch notebook to examine specific NPIs marked as high % of in/out-of-network for two specific NPIs
 
 # COMMAND ----------
 
@@ -130,9 +130,6 @@ spark.sql(f"""
 
 # read in ALL referrals for him to identify where come from
 
-START_DATE='2021-11-01'
-END_DATE='2022-10-31'
-
 referrals = spark.sql(f"""
     select *
     from {DB}.pcp_referrals
@@ -143,6 +140,12 @@ referrals = spark.sql(f"""
 # COMMAND ----------
 
 sdf_frequency(referrals, ['rend_pos_cat'], with_pct=True)
+
+# COMMAND ----------
+
+referrals = referrals.withColumn('network_flag_3cat', F.when(F.col('net_defhc_id_spec').isNull(), 'No Network').otherwise(F.col('network_flag_spec')))
+
+sdf_frequency(referrals, ['npi_spec', 'name_spec', 'network_flag_3cat', 'rend_pos_cat'], with_pct=True, maxobs=50)
 
 # COMMAND ----------
 
