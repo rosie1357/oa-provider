@@ -1,5 +1,5 @@
 # Databricks notebook source
-# scratch notebook to examine specific NPIs marked as high % of in/out-of-network for two specific NPIs
+# scratch notebook for assorted QC checks
 
 # COMMAND ----------
 
@@ -7,19 +7,76 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
+# MAGIC %md
 # MAGIC 
-# MAGIC select * from ds_provider.provider_oa_inputs_v1 where defhc_id=2832
+# MAGIC ### Assorted checks to match dashboards
 
 # COMMAND ----------
 
-DB = 'ds_provider_2832'
+# MAGIC %sql
+# MAGIC 
+# MAGIC select affiliation_4cat_pcp
+# MAGIC        ,sum(case when loyalty = 'Loyal' then 1 else 0 end) as loyal
+# MAGIC        ,sum(case when loyalty = 'Splitter' then 1 else 0 end) as splitter
+# MAGIC        ,sum(case when loyalty = 'Dissenter' then 1 else 0 end) as dissenter
+# MAGIC                ,count(*) as total
+# MAGIC from (
+# MAGIC 
+# MAGIC select *
+# MAGIC        ,case when count_in_network/(count_in_network+count_out_of_network) >= .7 then 'Loyal'
+# MAGIC             when count_in_network/(count_in_network+count_out_of_network) >= .3 then 'Splitter'
+# MAGIC             else 'Dissenter'
+# MAGIC             end as loyalty
+# MAGIC from (
+# MAGIC   select npi_pcp, 
+# MAGIC          affiliation_4cat_pcp, 
+# MAGIC          sum(count_in_network) as count_in_network,
+# MAGIC          sum(count_out_of_network) as count_out_of_network
+# MAGIC 
+# MAGIC 
+# MAGIC    from ds_provider.page4_pcp_dist
+# MAGIC   where defhc_id=547
+# MAGIC   group by npi_pcp, 
+# MAGIC          affiliation_4cat_pcp) a ) b
+# MAGIC group by affiliation_4cat_pcp  
+# MAGIC   
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select *
+# MAGIC from (
+# MAGIC 
+# MAGIC select name_pcp
+# MAGIC        ,sum(case when network_flag_spec = 'In-Network' then count else 0 end) as in_network
+# MAGIC        ,sum(case when network_flag_spec = 'Out-of-Network' then count else 0 end) as out_network
+# MAGIC        ,sum(count) as tot
+# MAGIC 
+# MAGIC from ds_provider.page4_patient_flow_pcps
+# MAGIC where defhc_id=547 and specialty_cat_spec in ('Vascular Surgery', 'Urology')
+# MAGIC group by name_pcp )
+# MAGIC order by tot desc
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC 
+# MAGIC 
+# MAGIC select net_defhc_name_spec, sum(count) as count
+# MAGIC 
+# MAGIC from ds_provider.page4_net_leakage
+# MAGIC where defhc_id=547
+# MAGIC group by net_defhc_name_spec
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ### 1. Kauser Yasmeen
+# MAGIC ### Kauser Yasmeen
+
+# COMMAND ----------
+
+DB = 'ds_provider_2832'
 
 # COMMAND ----------
 
@@ -100,7 +157,7 @@ spark.sql(f"""
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ### 2. Allen Detweiler
+# MAGIC ### Allen Detweiler
 
 # COMMAND ----------
 
