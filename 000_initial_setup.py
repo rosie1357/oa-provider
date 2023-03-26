@@ -250,8 +250,10 @@ schema = create_empty_output({'npi': IntegerType(),
                               'affiliation_2cat': StringType(),
                               'count_in_network': IntegerType(),
                               'count_out_of_network': IntegerType(),
+                              'count_no_network': IntegerType(),
                               'count_in_network_hosp_asc': IntegerType(),
-                              'count_out_of_network_hosp_asc': IntegerType()
+                              'count_out_of_network_hosp_asc': IntegerType(),
+                              'count_no_network_hosp_asc': IntegerType()
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.page3_top_panel_specialists")
@@ -301,7 +303,8 @@ pyspark_to_hive(schema, f"{DATABASE}.page3_top_pcp_flow")
 schema = create_empty_output({'specialty_cat_spec': StringType(),
                               'zipcd': StringType(),
                               'count_in_network': IntegerType(),
-                              'count_out_of_network': IntegerType()
+                              'count_out_of_network': IntegerType(),
+                              'count_no_network': IntegerType()
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.page4_loyalty_map_pcps")
@@ -314,7 +317,8 @@ schema = create_empty_output({'npi_pcp': StringType(),
                               'specialty_cat_spec': StringType(),
                               'affiliation_4cat_pcp': StringType(),
                               'count_in_network': IntegerType(),
-                              'count_out_of_network': IntegerType()
+                              'count_out_of_network': IntegerType(),
+                              'count_no_network': IntegerType()
                              })
 
 pyspark_to_hive(schema, f"{DATABASE}.page4_pcp_dist")
