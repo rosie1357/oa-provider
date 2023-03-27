@@ -208,7 +208,6 @@ pcp_ranked_sdf = spark.sql(f"""
                ,name_pcp
                ,npi_url_pcp
                ,defhc_id_spec as facility_id
-               ,network_flag_spec as network_flag
                ,count(*) as count
 
         from pcp_referrals_vw
@@ -219,7 +218,6 @@ pcp_ranked_sdf = spark.sql(f"""
                 ,name_pcp
                 ,npi_url_pcp
                 ,defhc_id_spec
-                ,network_flag_spec
         ) a
 
 """)

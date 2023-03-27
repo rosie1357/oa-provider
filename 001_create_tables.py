@@ -729,7 +729,6 @@ create_age_stmt = """ case when PatientBirthYearNum != 9999 then MxClaimYear - P
 # inner join full claims to NEARBY HCO NPIs, and join to ALL HCP NPIs, keeping indicator for nearby HCP
 # subset claims to given time period PLUS 90 days: the final perm table will only be given time frame,
 # but the plus 90 days will be used to create inpatient stays in 3C
-# create network ID, name and flag as coalesce of HCO network_flag and rendering provider network_flag
 
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
@@ -747,15 +746,11 @@ df_mxclaims_master = spark.sql(f"""
         , {create_age_stmt}
         
         , np.zip 
-        , np.defhc_id 
-        , prov.net_defhc_id_hcp
-        , coalesce(np.net_defhc_id, prov.net_defhc_id_hcp) as net_defhc_id
+        , np.defhc_id
+        , np.net_defhc_id
         , np.defhc_name
-        , prov.net_defhc_name_hcp
-        , coalesce(np.net_defhc_name, prov.net_defhc_name_hcp) as net_defhc_name
-        , np.network_flag as network_flag_hco
-        , prov.network_flag_hcp
-        , coalesce(np.network_flag, prov.network_flag_hcp, 'No Network') as network_flag
+        , np.net_defhc_name
+        , coalesce(np.network_flag, 'No Network') as network_flag
         , np.facility_type
         , np.FirmTypeName as defhc_fac_type
         
