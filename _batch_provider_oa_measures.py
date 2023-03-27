@@ -29,7 +29,7 @@ RUN_SETUP, DATABASE, DEFHC_ID = return_widget_values(RUN_VALUES, ['RUN_SETUP' , 
 
 # message to print on return of each notebook with output counts on pass
 
-COUNTS_MESSAGE = lambda d, k, t: f"All tables with {t} counts:" + '\n\t' + '\n\t'.join({f"{k}: {v:,d}" for k,v in d.get(k,{}).items()})
+COUNTS_MESSAGE = lambda d, t: f"All tables with {t} counts:" + '\n\t' + '\n\t'.join({f"{k}: {v:,d}" for k,v in d['message'].items()})
 
 # COMMAND ----------
 
@@ -58,7 +58,7 @@ if RUN_SETUP == 1:
 returns = ast.literal_eval(dbutils.notebook.run('001_create_tables', 0, arguments = RUN_ARGUMENTS))
 
 notebook_returns_passthrough(returns_dict = returns,
-                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'total')
+                             pass_message = COUNTS_MESSAGE(returns, 'total')
                             )
 
 # COMMAND ----------
@@ -68,7 +68,7 @@ notebook_returns_passthrough(returns_dict = returns,
 returns = ast.literal_eval(dbutils.notebook.run('002_dashboard', 0, arguments = RUN_ARGUMENTS))
 
 notebook_returns_passthrough(returns_dict = returns,
-                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'inserted')
+                             pass_message = COUNTS_MESSAGE(returns, 'inserted')
                             )
 
 # COMMAND ----------
@@ -78,7 +78,7 @@ notebook_returns_passthrough(returns_dict = returns,
 returns = ast.literal_eval(dbutils.notebook.run('004_specialists', 0, arguments = RUN_ARGUMENTS))
 
 notebook_returns_passthrough(returns_dict = returns,
-                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'inserted')
+                             pass_message = COUNTS_MESSAGE(returns, 'inserted')
                             )
 
 # COMMAND ----------
@@ -88,7 +88,7 @@ notebook_returns_passthrough(returns_dict = returns,
 returns = ast.literal_eval(dbutils.notebook.run('005_pcps', 0, arguments = RUN_ARGUMENTS))
 
 notebook_returns_passthrough(returns_dict = returns,
-                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'inserted')
+                             pass_message = COUNTS_MESSAGE(returns, 'inserted')
                             )
 
 # COMMAND ----------
@@ -98,5 +98,5 @@ notebook_returns_passthrough(returns_dict = returns,
 returns = ast.literal_eval(dbutils.notebook.run('006_facilities', 0, arguments = RUN_ARGUMENTS))
 
 notebook_returns_passthrough(returns_dict = returns,
-                             pass_message = COUNTS_MESSAGE(returns, 'all_counts', 'inserted')
+                             pass_message = COUNTS_MESSAGE(returns, 'inserted')
                             )
