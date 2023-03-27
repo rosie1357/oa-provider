@@ -165,11 +165,11 @@ fac_ranked_sdf.sort('facility_type','rank').display()
 
 # COMMAND ----------
 
-# confirm distinct by facility_id/network_flag
+# confirm distinct by facility_id
 
 ProvRunInstance.test_distinct(sdf = fac_ranked_sdf,
                               name = 'Facilities for Top 10 Chart',
-                              cols = ['facility_id', 'network_flag'],
+                              cols = ['facility_id'],
                               to_subset = False
                               )
 
