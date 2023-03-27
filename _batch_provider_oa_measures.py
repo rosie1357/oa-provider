@@ -29,7 +29,7 @@ RUN_SETUP, DATABASE, DEFHC_ID = return_widget_values(RUN_VALUES, ['RUN_SETUP' , 
 
 # message to print on return of each notebook with output counts on pass
 
-COUNTS_MESSAGE = lambda d, t: f"All tables with {t} counts:" + '\n\t' + '\n\t'.join({f"{k}: {v:,d}" for k,v in d['message'].items()})
+COUNTS_MESSAGE = lambda d, t: f"All tables with {t} counts:" + '\n\t' + '\n\t'.join({f"{k}: {v:,d}" for k,v in d.get('message',{}).items()})
 
 # COMMAND ----------
 
