@@ -212,31 +212,43 @@ ProvRunInstance.test_distinct(sdf = hcos_npi,
 # COMMAND ----------
 
 # read in affiliations to identify for each NPI:
+#  -- TOP affiliation overall,
 #  -- TOP affiliation for given firm type,
 #  --  whether ANY affiliation is equal to given facility
 
 hcp_affs = spark.sql(f"""
 
     select physician_npi
-           ,max(case when rn=1 then defhc_id else null end) as defhc_id_primary
-           ,max(case when rn=1 then hospital_name else null end) as defhc_name_primary
            
-           ,max(case when rn=1 and defhc_id = {DEFHC_ID} then 1 else 0 end) as primary_affiliation
-           ,max(case when rn>1 and defhc_id = {DEFHC_ID} then 1 else 0 end) as secondary_affiliation
+           /* identify top facility overall (used for assigning network if otherwise missing) */
+           
+           ,max(case when rn=1 then defhc_id else null end) as defhc_id_primary_overall
+           
+           /* identify top facility for given firm type, and whether primary or any for given firm type is given facility */
+           
+           ,max(case when rn_firm_type=1 and firm_type='{FIRM_TYPE}' then defhc_id else null end) as defhc_id_primary
+           ,max(case when rn_firm_type=1 and firm_type='{FIRM_TYPE}' then hospital_name else null end) as defhc_name_primary
+           
+           ,max(case when rn_firm_type=1 and firm_type='{FIRM_TYPE}' and defhc_id={DEFHC_ID} then 1 else 0 end) as primary_affiliation
+           ,max(case when rn_firm_type>1 and firm_type='{FIRM_TYPE}' and defhc_id={DEFHC_ID} then 1 else 0 end) as secondary_affiliation
            
     from (
     
         select physician_npi
                ,defhc_id
                ,hospital_name
-               ,row_number() over (partition by physician_npi 
+               ,firm_type
+               ,row_number() over (partition by physician_npi
                                    order by score_bucket desc, score desc)
                              as rn
+                             
+               ,row_number() over (partition by physician_npi, firm_type
+                                   order by score_bucket desc, score desc)
+                             as rn_firm_type
 
                 from   hcp_affiliations.physician_org_affiliations
                 where  include_flag = 1 and
-                       current_flag = 1 and 
-                       firm_type='{FIRM_TYPE}'
+                       current_flag = 1
                        
            ) a
            
@@ -248,9 +260,12 @@ hcp_affs.createOrReplaceTempView('hcp_affs_vw')
 # COMMAND ----------
 
 """
- join above table at NPI-level to hcos_npi_base_vw with by unique defhc_id to get net_defhc_id
- to identify whether top affiliation for each provider is in network,
- create 2 and 4 category affiliations
+ join above table at NPI-level to hcos_npi_base_vw TWICE:
+     - to get network for overall primary affiliation
+     - to create affiliation categories for firm type-specific primary affiliation 
+ 
+ For firm type-specific primary affiliation, want to identify whether top affiliation
+ for each provider is in network, and create 2 and 4 category affiliations
  
  two category affiliation:
    1. Primary affiliation to given facility
@@ -268,6 +283,9 @@ four category affiliation:
 hcp_affs_net = spark.sql("""
     
     select a.*
+          ,b.net_defhc_name as net_defhc_name_hcp
+          ,b.net_defhc_id as net_defhc_id_hcp
+          ,b.network_flag as network_flag_hcp
         
           ,case when primary_affiliation=1 then 'Primary'
                 when secondary_affiliation=1 then 'Secondary'
@@ -275,16 +293,21 @@ hcp_affs_net = spark.sql("""
                 end as affiliation_2cat
 
           ,case when primary_affiliation=1 then 'Facility' 
-                when b.network_flag = 'In-Network' then 'In-Network'
+                when c.network_flag = 'In-Network' then 'In-Network'
                 when defhc_id_primary is not null then 'Competitor'
                 else null
                 end as affiliation_4cat
     
     from hcp_affs_vw a
          left join
-         (select distinct defhc_id, network_flag from hcos_npi_base_vw) b
+         (select distinct defhc_id, net_defhc_id, net_defhc_name, network_flag from hcos_npi_base_vw) b
          
-     on a.defhc_id_primary = b.defhc_id
+         on a.defhc_id_primary_overall = b.defhc_id
+     
+         left join
+         (select distinct defhc_id, network_flag from hcos_npi_base_vw) c
+         
+         on a.defhc_id_primary = c.defhc_id
      
     """)
 
@@ -305,6 +328,9 @@ hcps = spark.sql(f"""
           ,coalesce(sp.specialty_type, 'None') as specialty_type
           ,coalesce(sp.include_pie, 'N') as include_pie
           
+          ,aff.net_defhc_name_hcp
+          ,aff.net_defhc_id_hcp
+          ,aff.network_flag_hcp
           ,aff.defhc_id_primary
           ,aff.defhc_name_primary
           
@@ -559,6 +585,9 @@ hcps_full = spark.sql(f"""
     select pv.npi        
         , pv.zip
         , pv.ProviderName
+        , pv.net_defhc_name_hcp
+        , pv.net_defhc_id_hcp
+        , pv.network_flag_hcp
         , pv.defhc_id_primary
         , pv.defhc_name_primary
         , pv.affiliation_2cat
@@ -700,6 +729,7 @@ create_age_stmt = """ case when PatientBirthYearNum != 9999 then MxClaimYear - P
 # inner join full claims to NEARBY HCO NPIs, and join to ALL HCP NPIs, keeping indicator for nearby HCP
 # subset claims to given time period PLUS 90 days: the final perm table will only be given time frame,
 # but the plus 90 days will be used to create inpatient stays in 3C
+# create network ID, name and flag as coalesce of HCO network_flag and rendering provider network_flag
 
 df_mxclaims_master = spark.sql(f"""
     select /*+ BROADCAST(pos) */
@@ -718,10 +748,14 @@ df_mxclaims_master = spark.sql(f"""
         
         , np.zip 
         , np.defhc_id 
-        , np.net_defhc_id
+        , prov.net_defhc_id_hcp
+        , coalesce(np.net_defhc_id, prov.net_defhc_id_hcp) as net_defhc_id
         , np.defhc_name
-        , np.net_defhc_name
-        , np.network_flag
+        , prov.net_defhc_name_hcp
+        , coalesce(np.net_defhc_name, prov.net_defhc_name_hcp) as net_defhc_name
+        , np.network_flag as network_flag_hco
+        , prov.network_flag_hcp
+        , coalesce(np.network_flag, prov.network_flag_hcp, 'No Network') as network_flag
         , np.facility_type
         , np.FirmTypeName as defhc_fac_type
         
@@ -887,6 +921,9 @@ referrals1 = spark.sql(f"""
         , ref.defhc_name_primary as affiliation_pcp
         , ref.zip as zip_pcp
         , ref.npi_url as npi_url_pcp
+        , ref.net_defhc_name_hcp as raw_net_defhc_name_pcp
+        , ref.net_defhc_id_hcp as raw_net_defhc_id_pcp
+        , ref.network_flag_hcp as raw_network_flag_pcp
         
         , rend_npi as npi_spec
         , rend_fac_npi as npi_fac_spec
@@ -900,6 +937,9 @@ referrals1 = spark.sql(f"""
         , rend.defhc_name_primary as affiliation_spec
         , rend.zip as zip_spec
         , rend.npi_url as npi_url_spec
+        , rend.net_defhc_name_hcp as raw_net_defhc_name_spec
+        , rend.net_defhc_id_hcp as raw_net_defhc_id_spec
+        , rend.network_flag_hcp as raw_network_flag_spec
         
         , ref.nearby as nearby_pcp
         , rend.nearby as nearby_spec
@@ -923,6 +963,7 @@ referrals1.createOrReplaceTempView('referrals1_vw')
 
 # read in above view and again join TWICE to all HCOs to join on HCO-level info for both PCP and spec
 # subset to nearby spec (rendering) facilities
+# create network flags for ref and rend by coalescing HCO with HCP
 
 referrals_fnl = spark.sql(f"""
 
@@ -933,18 +974,20 @@ referrals_fnl = spark.sql(f"""
         select a.*
 
             , ref.defhc_id as defhc_id_pcp 
-            , ref.net_defhc_id as net_defhc_id_pcp
+            , coalesce(ref.net_defhc_id, raw_net_defhc_id_pcp) as net_defhc_id_pcp
             , ref.defhc_name as defhc_name_pcp
-            , ref.net_defhc_name as net_defhc_name_pcp
+            , coalesce(ref.net_defhc_name, raw_net_defhc_name_pcp) as net_defhc_name_pcp
             , ref.facility_type as facility_type_pcp
-            , ref.network_flag as network_flag_pcp
+            , ref.network_flag as network_flag_hco_pcp
+            , coalesce(ref.network_flag, raw_network_flag_pcp, 'No Network') as network_flag_pcp
 
             , rend.defhc_id as defhc_id_spec
-            , rend.net_defhc_id as net_defhc_id_spec
+            , coalesce(rend.net_defhc_id, raw_net_defhc_id_spec) as net_defhc_id_spec
             , rend.defhc_name as defhc_name_spec
-            , rend.net_defhc_name as net_defhc_name_spec
+            , coalesce(rend.net_defhc_name, raw_net_defhc_name_spec) as net_defhc_name_spec
             , rend.facility_type as facility_type_spec
-            , rend.network_flag as network_flag_spec
+            , rend.network_flag as network_flag_hco_spec
+            , coalesce(rend.network_flag, raw_network_flag_spec, 'No Network') as network_flag_spec
 
             , ref.nearby as nearby_fac_pcp
             , rend.nearby as nearby_fac_spec

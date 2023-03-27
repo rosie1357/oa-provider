@@ -57,6 +57,7 @@ page4_loyalty_map_sdf = spark.sql(f"""
         ,  zip_pcp as zipcd
         ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) as count_in_network
         ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
+        ,  sum(case when network_flag_spec = 'No Network' then 1 else 0 end) as count_no_network
         
     from pcp_referrals_vw
           
@@ -87,6 +88,7 @@ page4_pcp_dist_sdf = spark.sql(f"""
         ,  affiliation_4cat_pcp
         ,  sum(case when network_flag_spec = 'In-Network' then 1 else 0 end) as count_in_network
         ,  sum(case when network_flag_spec = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
+        ,  sum(case when network_flag_spec = 'No Network' then 1 else 0 end) as count_no_network
            
     from   pcp_referrals_vw
          
