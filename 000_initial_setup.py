@@ -404,7 +404,6 @@ schema = create_empty_output({'facility_type': StringType(),
                               'name_pcp':  StringType(),
                               'npi_url_pcp': StringType(),
                               'facility_id': StringType(),
-                              'network_flag': StringType(),
                               'count': IntegerType(),
                               'rank': IntegerType()
                              })
