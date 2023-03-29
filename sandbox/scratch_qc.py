@@ -192,7 +192,7 @@ referrals = spark.sql(f"""
     from {DB}.pcp_referrals
     where npi_pcp = '{NPI}'
            
-""").checkpoint()
+""")
 
 # COMMAND ----------
 
@@ -211,3 +211,61 @@ sdf_frequency(referrals, ['net_defhc_id_spec'], with_pct=True)
 # COMMAND ----------
 
 sdf_frequency(referrals.filter((F.col('net_defhc_id_spec').isNotNull()) & (F.col('rend_pos_cat') != 'Office')), ['network_flag_spec'], with_pct=True)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC ### Top 10 PCPs with three cat network values
+
+# COMMAND ----------
+
+spark.sql(f"select * from {DB}.input_org_info").display()
+
+# COMMAND ----------
+
+# NEW values
+
+spark.sql(f"""
+    select name_pcp
+          ,tot
+          ,100*(in/tot) as pct_in
+          ,100*(out/tot) as pct_out
+          ,100*(no/tot) as pct_no
+    from (
+    select name_pcp
+          ,sum(case when network_flag_spec='Out-of-Network' then 1 else 0 end) as out
+          ,sum(case when network_flag_spec='In-Network' then 1 else 0 end) as in
+          ,sum(case when network_flag_spec='No Network' then 1 else 0 end) as no
+          ,count(*) as tot
+    from {DB}.pcp_referrals
+    group by name_pcp
+    ) a
+        order by tot desc
+    limit 10
+
+""").display()
+
+# COMMAND ----------
+
+# OLD values
+
+spark.sql(f"""
+    select name_pcp
+          ,tot
+          ,100*(in/tot) as pct_in
+          ,100*(out/tot) as pct_out
+          ,100*(no/tot) as pct_no
+    from (
+    select name_pcp
+          ,sum(case when network_flag_hco_spec='Out-of-Network' then 1 else 0 end) as out
+          ,sum(case when network_flag_hco_spec='In-Network' then 1 else 0 end) as in
+          ,sum(case when network_flag_hco_spec is null then 1 else 0 end) as no
+          ,count(*) as tot
+    from {DB}.pcp_referrals
+    group by name_pcp
+    ) a
+        order by tot desc
+    limit 10
+
+""").display()
