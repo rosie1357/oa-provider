@@ -78,7 +78,8 @@ def network_flag(network_col, network_value, suffix=''):
     """
     
     return f"""case when {network_col} = {network_value} then 'In-Network'
-             else 'Out-of-Network'
+                    when {network_col} is not null then 'Out-of-Network'
+                    else null
              end as network_flag{suffix}
          """
 

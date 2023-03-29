@@ -62,9 +62,11 @@ page3_top_sdf = spark.sql(f"""
            
            ,sum(case when network_flag = 'In-Network' then 1 else 0 end) as count_in_network
            ,sum(case when network_flag = 'Out-of-Network' then 1 else 0 end) as count_out_of_network
+           ,sum(case when network_flag = 'No Network' then 1 else 0 end) as count_no_network
            
            ,sum(case when network_flag = 'In-Network' and {HOSP_ASC_HOPD_SUBSET} then 1 else 0 end) as count_in_network_hosp_asc
            ,sum(case when network_flag = 'Out-of-Network' and {HOSP_ASC_HOPD_SUBSET} then 1 else 0 end) as count_out_of_network_hosp_asc
+           ,sum(case when network_flag = 'No Network' and {HOSP_ASC_HOPD_SUBSET} then 1 else 0 end) as count_no_network_hosp_asc
            
    from mxclaims_master_vw
    where specialty_type = 'Specialist'
