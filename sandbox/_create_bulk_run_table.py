@@ -9,13 +9,11 @@ NOTE!! Temporary process until standardized monthly runs are in place
 
 # COMMAND ----------
 
-# MAGIC %run /Repos/Data_Science/oa_provider/_funcs_include/all_provider_funcs
-
-# COMMAND ----------
-
 import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+
+from _general_funcs.fs_funcs import pyspark_to_hive
 
 # COMMAND ----------
 

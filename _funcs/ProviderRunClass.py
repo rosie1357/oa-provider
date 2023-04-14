@@ -1,33 +1,14 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Notebook with main provider class
-
-# COMMAND ----------
-
-# MAGIC %run ./params
-
-# COMMAND ----------
-
-# MAGIC %run ./credentials
-
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/fs_funcs
-
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/sdf_funcs
-
-# COMMAND ----------
-
-# MAGIC %run ./output_funcs
-
-# COMMAND ----------
-
 import pyspark.sql.functions as F
+import pandas as pd
+from pyspark.sql import SparkSession
 
-# COMMAND ----------
+from _general_funcs.sdf_funcs import sdf_return_row_values
+from _general_funcs.fs_funcs import hive_tbl_count
+
+from oa_provider._funcs.params import ALL_TABLES, COUNTS_TBL, STATUS_TBL, GET_FAC_DATABASE
+from oa_provider._funcs.output_funcs import csv_upload_s3, populate_most_recent
+
+spark = SparkSession.builder.getOrCreate()
 
 class ProviderRun(object):
     

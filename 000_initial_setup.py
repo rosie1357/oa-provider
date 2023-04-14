@@ -32,14 +32,15 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./_funcs_include/all_provider_funcs
-
-# COMMAND ----------
-
 import pandas as pd
 
 from functools import reduce
 from pyspark.sql.types import StringType, IntegerType, BooleanType
+
+from oa_provider._funcs.setup_funcs import get_widgets, return_widget_values
+from oa_provider._funcs.output_funcs import create_empty_output
+
+from _general_funcs.fs_funcs import pyspark_to_hive, hive_sample
 
 # COMMAND ----------
 

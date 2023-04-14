@@ -1,15 +1,8 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Notebook to include all geo functions for provider dashboard
-
-# COMMAND ----------
-
 import geopandas as gpd 
-
+from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 
-# COMMAND ----------
+spark = SparkSession.builder.getOrCreate()
 
 def get_coordinates(df, longitude='longitude', latitude='latitude'):
     """
@@ -32,8 +25,6 @@ def get_coordinates(df, longitude='longitude', latitude='latitude'):
 
     # Now reproject to a crs using meters
     return gdf.to_crs('epsg:3857')
-
-# COMMAND ----------
 
 def get_intersection(base_gdf, match_gdf, id_col, keep_coords='None', **kwargs):
     """
@@ -74,6 +65,5 @@ def get_intersection(base_gdf, match_gdf, id_col, keep_coords='None', **kwargs):
         schema = StructType([schema.fields + schema_addtl.fields][0])
         
         keep_cols += kwargs['keep_cols']
-        
     
     return spark.createDataFrame(intersection[keep_cols], schema=schema)

@@ -14,7 +14,9 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./_funcs_include/all_provider_funcs
+from oa_provider._funcs.setup_funcs import get_widgets, return_widget_values, return_run_status
+
+from _general_funcs.decorators import timeit
 
 # COMMAND ----------
 

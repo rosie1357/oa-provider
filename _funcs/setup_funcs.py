@@ -1,21 +1,7 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Notebook to include all base/setup functions for provider dashboard
-
-# COMMAND ----------
-
 from operator import itemgetter
+from pyspark.sql import SparkSession
 
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/fs_funcs
-
-# COMMAND ----------
-
-# MAGIC %run ./params
-
-# COMMAND ----------
+spark = SparkSession.builder.getOrCreate()
 
 def get_widgets(include_widgets = list(range(1,8))):
     """
@@ -93,7 +79,6 @@ def get_widgets(include_widgets = list(range(1,8))):
     
     return values_dict
 
-# COMMAND ----------
 
 def return_widget_values(widget_dict, vars):
     
@@ -103,7 +88,6 @@ def return_widget_values(widget_dict, vars):
         
     return tuple(returns)
 
-# COMMAND ----------
 
 def return_run_status(db, tbl, defhc_id, radius, start_date, end_date, lt18):
     """

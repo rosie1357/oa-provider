@@ -1,9 +1,6 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Notebook to include funcs to calculate bar/pie chart numbers
+from pyspark.sql import SparkSession
 
-# COMMAND ----------
+spark = SparkSession.builder.getOrCreate()
 
 def get_top_values(intable, defhc, defhc_value, max_row, strat_cols, subset=''):
     """
