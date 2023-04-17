@@ -7,8 +7,6 @@ from pyspark.sql import SparkSession
 from _general_funcs.fs_funcs import hive_tbl_count, hive_tbl_cols, hive_to_df
 from _general_funcs.aws_funcs import boto3_s3_client, upload_s3
 
-spark = SparkSession.builder.getOrCreate()
-
 def populate_most_recent(sdf, table, condition):
     """
     function populate_most_recent to identify any recs in given table to set as most_recent=False and get run count before inserting recent recs
@@ -20,6 +18,8 @@ def populate_most_recent(sdf, table, condition):
     returns:
       none
     """
+
+    spark = SparkSession.getActiveSession()
 
     # first, identify if there are any existing counts for the same condition, and set most_recent = False
 
@@ -59,6 +59,8 @@ def create_empty_output(measure_dict):
         empty spark df with given fields
         
     """
+
+    spark = SparkSession.getActiveSession()
     
     # create set of initial base columns and final time stamp column
     

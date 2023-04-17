@@ -1,7 +1,5 @@
 from pyspark.sql import SparkSession
 
-spark = SparkSession.builder.getOrCreate()
-
 def get_top_values(intable, defhc, defhc_value, max_row, strat_cols, subset=''):
     """
     Function get_top_values() to get aggregate claim counts for either pie chart (by network) or bar chart (by facility)
@@ -21,6 +19,8 @@ def get_top_values(intable, defhc, defhc_value, max_row, strat_cols, subset=''):
         spark df with claim counts at network or facility level
     
     """
+
+    spark = SparkSession.getActiveSession()
     
     # assign place_name based on defhc (whether specified as defhc or net_defhc)
     

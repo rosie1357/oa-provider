@@ -1,7 +1,6 @@
 from operator import itemgetter
 from pyspark.sql import SparkSession
-
-spark = SparkSession.builder.getOrCreate()
+from _general_funcs.utils import get_dbutils
 
 def get_widgets(include_widgets = list(range(1,8))):
     """
@@ -73,9 +72,9 @@ def get_widgets(include_widgets = list(range(1,8))):
         
         name, default, var, clean_func = itemgetter('name', 'default', 'var', 'clean_func')(all_widgets[w_num])
         
-        dbutils.widgets.text(name, default)
+        get_dbutils().widgets.text(name, default)
         
-        values_dict[var] = (name, clean_func(dbutils.widgets.get(name)))
+        values_dict[var] = (name, clean_func(get_dbutils().widgets.get(name)))
     
     return values_dict
 
@@ -106,6 +105,8 @@ def return_run_status(db, tbl, defhc_id, radius, start_date, end_date, lt18):
         if zero records found, print message and return tuple of None, None
     
     """
+
+    spark = SparkSession.getActiveSession()
     
     status = spark.sql(f"""select success, current_dt from {db}.{tbl} 
                            where defhc_id={defhc_id} and radius={radius} and start_date='{start_date}' and end_date='{end_date}' and subset_lt18={lt18}

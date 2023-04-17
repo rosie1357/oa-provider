@@ -8,7 +8,7 @@ from _general_funcs.fs_funcs import hive_tbl_count
 from oa_provider._funcs.params import ALL_TABLES, COUNTS_TBL, STATUS_TBL, GET_FAC_DATABASE
 from oa_provider._funcs.output_funcs import csv_upload_s3, populate_most_recent
 
-spark = SparkSession.builder.getOrCreate()
+spark = SparkSession.getActiveSession()
 
 class ProviderRun(object):
     

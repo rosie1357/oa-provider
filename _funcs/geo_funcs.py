@@ -2,8 +2,6 @@ import geopandas as gpd
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 
-spark = SparkSession.builder.getOrCreate()
-
 def get_coordinates(df, longitude='longitude', latitude='latitude'):
     """
     Function get_coordinates to take input pandas df with longitude and latitude columns and return
@@ -43,6 +41,8 @@ def get_intersection(base_gdf, match_gdf, id_col, keep_coords='None', **kwargs):
     
     
     """
+
+    spark = SparkSession.getActiveSession()
 
     intersection = gpd.sjoin(base_gdf, match_gdf, how='left')
     

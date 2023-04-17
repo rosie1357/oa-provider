@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 
-spark = SparkSession.builder.getOrCreate()
+spark = SparkSession.getActiveSession()
 
 BASEDIR = '/dbfs/FileStore/datascience/oa_provider'
 S3_BUCKET = 'dhc-ize'
