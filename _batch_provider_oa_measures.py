@@ -14,10 +14,14 @@
 
 # COMMAND ----------
 
+# MAGIC %run ./_funcs/_paths_include
+
+# COMMAND ----------
+
 import ast
 
-from oa_provider._funcs.setup_funcs import get_widgets, return_widget_values
-from oa_provider._funcs.params import GET_FAC_DATABASE
+from _funcs.setup_funcs import get_widgets, return_widget_values
+from _funcs.params import GET_FAC_DATABASE
 
 from _general_funcs.notebook_pipeline_funcs import notebook_returns_passthrough
 

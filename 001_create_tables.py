@@ -42,12 +42,17 @@
 
 # COMMAND ----------
 
-from pyspark.sql.types import IntegerType
+# MAGIC %run ./_funcs/_paths_include
 
-from oa_provider._funcs.setup_funcs import get_widgets, return_widget_values
-from oa_provider._funcs.ProviderRunClass import ProviderRun
-from oa_provider._funcs.params import network_flag, assign_fac_types, PHYS_LINK, CHECKPOINT_DIR
-from oa_provider._funcs.geo_funcs import get_intersection, get_coordinates
+# COMMAND ----------
+
+from pyspark.sql.types import IntegerType
+import pyspark.sql.functions as F
+
+from _funcs.setup_funcs import get_widgets, return_widget_values
+from _funcs.ProviderRunClass import ProviderRun
+from _funcs.params import network_flag, assign_fac_types, PHYS_LINK, CHECKPOINT_DIR, MX_CLMS_TBL, PCP_REFS_TBL
+from _funcs.geo_funcs import get_intersection, get_coordinates
 
 from _general_funcs.base_python_funcs import add_time
 from _general_funcs.sdf_funcs import sdf_return_row_values, sdf_create_window

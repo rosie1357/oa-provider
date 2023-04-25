@@ -1,4 +1,8 @@
-import geopandas as gpd 
+import os
+os.environ['USE_PYGEOS'] = '0'
+
+import geopandas as gpd
+
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 

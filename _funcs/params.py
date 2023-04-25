@@ -1,8 +1,4 @@
-from pyspark.sql import SparkSession
-
-spark = SparkSession.getActiveSession()
-
-BASEDIR = '/dbfs/FileStore/datascience/oa_provider'
+REF_S3_BUCKET = 's3://dhc-datascience-prod/ds_provider/reference_data'
 S3_BUCKET = 'dhc-ize'
 S3_KEY = 'oppurtunity-assesment/clientdata'
 

@@ -30,9 +30,13 @@
 
 # COMMAND ----------
 
-from oa_provider._funcs.setup_funcs import get_widgets, return_widget_values
-from oa_provider._funcs.ProviderRunClass import ProviderRun
-from oa_provider._funcs.chart_calc_funcs import get_top_values
+# MAGIC %run ./_funcs/_paths_include
+
+# COMMAND ----------
+
+from _funcs.setup_funcs import get_widgets, return_widget_values
+from _funcs.ProviderRunClass import ProviderRun
+from _funcs.chart_calc_funcs import get_top_values
 
 # COMMAND ----------
 
