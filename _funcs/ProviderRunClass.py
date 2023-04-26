@@ -5,6 +5,7 @@ from pyspark.sql import SparkSession
 from _general_funcs.sdf_funcs import sdf_return_row_values
 from _general_funcs.sdf_print_comp_funcs import sdf_check_distinct
 from _general_funcs.fs_funcs import hive_tbl_count
+from _general_funcs.utils import get_dbutils
 
 from _funcs.params import ALL_TABLES, COUNTS_TBL, STATUS_TBL, GET_FAC_DATABASE
 from _funcs.output_funcs import csv_upload_s3, populate_most_recent
@@ -333,7 +334,7 @@ class ProviderRun(object):
             if final_nb:
                 self.insert_run_status()
                 
-        return dbutils.notebook.exit(notebook_return)
+        return get_dbutils().notebook.exit(notebook_return)
         
     def test_distinct(self, sdf, name, cols, to_subset=True):
         """
