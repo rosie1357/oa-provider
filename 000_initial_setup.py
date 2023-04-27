@@ -32,7 +32,11 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./_funcs_include/all_provider_funcs
+pip install openpyxl
+
+# COMMAND ----------
+
+# MAGIC %run ./_funcs/_paths_include
 
 # COMMAND ----------
 
@@ -40,6 +44,12 @@ import pandas as pd
 
 from functools import reduce
 from pyspark.sql.types import StringType, IntegerType, BooleanType
+
+from _funcs.setup_funcs import get_widgets, return_widget_values
+from _funcs.output_funcs import create_empty_output
+from _funcs.params import REF_S3_BUCKET
+
+from _general_funcs.fs_funcs import pyspark_to_hive, hive_sample
 
 # COMMAND ----------
 
@@ -64,7 +74,7 @@ LOOKUP_TABLES = [f"{DATABASE}.hcp_specialty_assignment",
 
 # import lookup table, rename cols to save in hive
 
-spec_df = pd.read_excel("/dbfs/FileStore/datascience/oa_provider/Appendix_1__Provider_OA___Specialist_vs_PCP_Assignment.xlsx")
+spec_df = pd.read_excel(f"{REF_S3_BUCKET}/Appendix_1_Provider_OA_Specialist_vs_PCP_Assignment.xlsx")
 
 spec_df.columns = ['specialty_id', 'specialty_name', 'specialty_cat', 'specialty_type', 'include_pie']
 spec_df.head()

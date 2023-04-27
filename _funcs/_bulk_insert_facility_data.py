@@ -1,31 +1,28 @@
 # Databricks notebook source
-# MAGIC %md 
+# MAGIC %md
+# MAGIC 
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
-# MAGIC
+# MAGIC 
 # MAGIC ## Provider OA Measures: Bulk submit batch provider run
-# MAGIC  
+# MAGIC 
 # MAGIC **Program:** _batch_provider_oa_measures
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
 # MAGIC <br>
 # MAGIC <br>
-# MAGIC **Description:** Bulk submit to call driver program for Provider OA measures once per facility/radius/date entry
+# MAGIC **Description:** Bulk submit to call driver program for Provider OA measures once per facility/radius/date entry <br>
 
 # COMMAND ----------
 
-# MAGIC %run ./_funcs/_paths_include
-
-# COMMAND ----------
+from oa_provider._funcs.setup_funcs import get_widgets, return_widget_values, return_run_status
 
 from _general_funcs.decorators import timeit
-
-from _funcs.setup_funcs import get_widgets, return_widget_values
 
 # COMMAND ----------
 
 # create func decorated with timeit to print elapsed time for each call to batch notebook
 
-@timeit()
+@timeit
 def run_batch(arguments_dict):
     
     returns = dbutils.notebook.run('_batch_provider_oa_measures', 0, arguments=arguments_dict)
@@ -46,7 +43,7 @@ DATABASE = 'ds_provider'
 
 INPUT_TABLE, RERUN_EXISTING = return_widget_values(RUN_VALUES, ['INPUT_TABLE', 'RERUN_EXISTING'])
 
-INPUTS_DF = spark.sql(f"""select distinct DEFHC_ID, RADIUS, START_DATE, END_DATE, LT18, SORT from {INPUT_TABLE} ORDER BY SORT""").toPandas()
+INPUTS_DF = spark.sql(f"""select distinct DEFHC_ID, RADIUS, START_DATE, END_DATE, LT18, INT(SORT) as SORT from {INPUT_TABLE} ORDER BY INT(SORT)""").toPandas()
 
 # COMMAND ----------
 
@@ -75,7 +72,7 @@ for index, row in INPUTS_DF.iterrows():
             print('\t' + f"(Run with errors on {date.date()}, will rerun)")
 
     print(process_stmt(n=SORT, x='PROCESSING'))
-    """
+
     run_batch(arguments_dict={RUN_VALUES['RUN_SETUP'][0]: 0, 
                                RUN_VALUES['DEFHC_ID'][0]: DEFHC_ID,
                                RUN_VALUES['RADIUS'][0]: RADIUS,
@@ -84,4 +81,3 @@ for index, row in INPUTS_DF.iterrows():
                                RUN_VALUES['DATABASE'][0]: DATABASE,
                                RUN_VALUES['RUN_QC'][0]: 0,
                                RUN_VALUES['SUBSET_LT18'][0]: LT18})
-    """

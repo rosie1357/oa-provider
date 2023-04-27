@@ -3,7 +3,7 @@
 
 # COMMAND ----------
 
-# MAGIC %run /Repos/Data_Science/oa_provider/_funcs_include/all_provider_funcs
+from _general_funcs.sdf_print_comp_funcs import sdf_frequency
 
 # COMMAND ----------
 
@@ -56,17 +56,6 @@
 # MAGIC where defhc_id=547 and specialty_cat_spec in ('Vascular Surgery', 'Urology')
 # MAGIC group by name_pcp )
 # MAGIC order by tot desc
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC 
-# MAGIC 
-# MAGIC select net_defhc_name_spec, sum(count) as count
-# MAGIC 
-# MAGIC from ds_provider.page4_net_leakage
-# MAGIC where defhc_id=547
-# MAGIC group by net_defhc_name_spec
 
 # COMMAND ----------
 

@@ -9,7 +9,11 @@ NOTE!! Temporary process until standardized monthly runs are in place
 
 # COMMAND ----------
 
-# MAGIC %run /Repos/Data_Science/oa_provider/_funcs_include/all_provider_funcs
+pip install openpyxl
+
+# COMMAND ----------
+
+# MAGIC %run ../_funcs/_paths_include
 
 # COMMAND ----------
 
@@ -17,18 +21,22 @@ import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
+from _general_funcs.fs_funcs import pyspark_to_hive
+
+from _funcs.params import REF_S3_BUCKET
+
 # COMMAND ----------
 
 # set params to use for input excel, end date, output table
 
-IN_FILE = "/dbfs/FileStore/datascience/oa_provider/DashboardAlphaList_2023_03_28.xlsx"
+IN_FILE = f"{REF_S3_BUCKET}/DashboardAlphaList_2023_03_28.xlsx"
 END_DATE = '2022-11-30'
 OUT_TABLE = 'ds_provider.provider_oa_inputs_20230328'
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 0. Functions
 
 # COMMAND ----------
@@ -96,7 +104,7 @@ def create_bulk_table(infile, end_date):
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 1. Read Excel list
 
 # COMMAND ----------
@@ -107,7 +115,7 @@ df = create_bulk_table(infile = IN_FILE,
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 2. Create perm table
 
 # COMMAND ----------

@@ -1,33 +1,15 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Notebook with main provider class
-
-# COMMAND ----------
-
-# MAGIC %run ./params
-
-# COMMAND ----------
-
-# MAGIC %run ./credentials
-
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/fs_funcs
-
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/sdf_funcs
-
-# COMMAND ----------
-
-# MAGIC %run ./output_funcs
-
-# COMMAND ----------
-
 import pyspark.sql.functions as F
+import pandas as pd
+from pyspark.sql import SparkSession
 
-# COMMAND ----------
+from _general_funcs.sdf_funcs import sdf_return_row_values
+from _general_funcs.sdf_print_comp_funcs import sdf_check_distinct
+from _general_funcs.fs_funcs import hive_tbl_count, hive_to_df
+from _general_funcs.utils import get_dbutils
+
+from _funcs.params import ALL_TABLES, COUNTS_TBL, STATUS_TBL, GET_FAC_DATABASE, S3_BUCKET, S3_KEY
+from _funcs.output_funcs import csv_upload_s3, populate_most_recent
+from _funcs.credentials import AWS_CREDS
 
 class ProviderRun(object):
     
@@ -37,7 +19,14 @@ class ProviderRun(object):
                  db_tables = ALL_TABLES,
                  counts_table = COUNTS_TBL,
                  status_table = STATUS_TBL,
-                 return_fac_db = GET_FAC_DATABASE):
+                 return_fac_db = GET_FAC_DATABASE,
+                 s3_bucket = S3_BUCKET,
+                 s3_key = S3_KEY,
+                 aws_creds = AWS_CREDS):
+
+        # create active session
+
+        self.spark = SparkSession.getActiveSession()
         
         self.defhc_id = defhc_id
         self.radius = radius
@@ -49,6 +38,10 @@ class ProviderRun(object):
         self.charts_instance = charts_instance
         self.base_output_prefix = base_output_prefix
         self.db_tables = db_tables
+        self.s3_bucket = S3_BUCKET
+        self.s3_key = S3_KEY
+        self.aws_creds = AWS_CREDS
+
         self.counts_table = f"{self.database}.{counts_table}"
         self.status_table = f"{self.database}.{status_table}"
         
@@ -105,7 +98,7 @@ class ProviderRun(object):
                                  index=[0]
                          )
 
-        return spark.createDataFrame(df)
+        return self.spark.createDataFrame(df)
     
     def insert_table_counts(self, database, table_name, count):
         """
@@ -122,7 +115,7 @@ class ProviderRun(object):
 
         # create sdf with base cols, count and time stamp, then call populate_counts() to set any remaining recs to False and insert new rec
 
-        counts_sdf = self.create_final_output(counts_sdf = spark.createDataFrame(pd.DataFrame(data={'database': database,
+        counts_sdf = self.create_final_output(counts_sdf = self.spark.createDataFrame(pd.DataFrame(data={'database': database,
                                                                                                     'table_name': table_name,
                                                                                                     'count': count}, 
                                                                                               index=[0])),
@@ -172,11 +165,11 @@ class ProviderRun(object):
 
         database, table_name = table.split('.')[0], table.split('.')[1]
 
-        table_exists = spark._jsparkSession.catalog().tableExists(database, table_name)
+        table_exists = self.spark._jsparkSession.catalog().tableExists(database, table_name)
 
         if must_exist or (must_exist==False and table_exists):
 
-            old_dts = spark.sql(f"""
+            old_dts = self.spark.sql(f"""
                 select distinct current_dt
                 from {table}
                 where {self.condition_stmt()}
@@ -187,7 +180,7 @@ class ProviderRun(object):
             else:
                 print("No old records found to delete")
 
-            spark.sql(f"""
+            self.spark.sql(f"""
                 delete
                 from {table}
                 where {self.condition_stmt()}
@@ -197,7 +190,7 @@ class ProviderRun(object):
 
             insert_cols = ', '.join(sdf.columns)
 
-            spark.sql(f"""
+            self.spark.sql(f"""
                 insert into {table} ({insert_cols})
                 select * from sdf_vw
                 """)
@@ -205,14 +198,14 @@ class ProviderRun(object):
 
             print(f"Table {table} did NOT exist - creating now")
 
-            spark.sql(f"""
+            self.spark.sql(f"""
                 create table {table} as 
                 select * from sdf_vw        
                 """)
 
         print(f"New records inserted (max {maxrecs}):")
 
-        spark.sql(f"""
+        self.spark.sql(f"""
            select *
            from {table}
            where {self.condition_stmt()}
@@ -222,7 +215,7 @@ class ProviderRun(object):
         # upload to s3 if charts instance of class
         
         if self.charts_instance:
-            csv_upload_s3(table, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
+            csv_upload_s3(table, bucket=self.s3_bucket, key_prefix=self.s3_key, **self.aws_creds)
             
         tbl_count = hive_tbl_count(table, condition = f"where {self.condition_stmt()}")
         
@@ -271,7 +264,7 @@ class ProviderRun(object):
 
         for tbl in self.db_tables:
 
-            spark.sql(f"""
+            self.spark.sql(f"""
                 create or replace temp view {tbl}_vw as
                 select * 
                 from {self.fac_database}.{tbl}
@@ -296,7 +289,7 @@ class ProviderRun(object):
         
         """
         
-        run_sdf = self.create_final_output(counts_sdf = spark.createDataFrame(pd.DataFrame(data={'success': success,
+        run_sdf = self.create_final_output(counts_sdf = self.spark.createDataFrame(pd.DataFrame(data={'success': success,
                                                                                                  'fail_reason': fail_message}, 
                                                                                               index=[0])),
                                               insert = False
@@ -311,7 +304,7 @@ class ProviderRun(object):
         
         print(f"All recs for given params:")
 
-        spark.sql(f"""
+        self.spark.sql(f"""
            select *
            from {self.status_table}
            where {self.condition_stmt(id_prefix='')}
@@ -349,7 +342,7 @@ class ProviderRun(object):
             if final_nb:
                 self.insert_run_status()
                 
-        return dbutils.notebook.exit(notebook_return)
+        return get_dbutils().notebook.exit(notebook_return)
         
     def test_distinct(self, sdf, name, cols, to_subset=True):
         """

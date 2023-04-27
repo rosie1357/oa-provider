@@ -1,21 +1,10 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Notebook to include params for provider dashboard
-
-# COMMAND ----------
-
-BASEDIR = '/dbfs/FileStore/datascience/oa_provider'
+REF_S3_BUCKET = 's3://dhc-datascience-prod/ds_provider/reference_data'
 S3_BUCKET = 'dhc-ize'
 S3_KEY = 'oppurtunity-assesment/clientdata'
-
-# COMMAND ----------
 
 # link to physician page
 
 PHYS_LINK = "https://www.defhc.com/physicians/"
-
-# COMMAND ----------
 
 # variables to hold names of base/output tables
 
@@ -37,23 +26,14 @@ ALL_TABLES = ['input_org_info',
 COUNTS_TBL = 'record_counts'
 STATUS_TBL = 'run_status'
 
-# COMMAND ----------
 
 GET_FAC_DATABASE = lambda db, id: f"{db}_{id}"
 
-# COMMAND ----------
-
 NEW_STAY_DAYS_CUTOFF = 7
-
-# COMMAND ----------
 
 # set checkpoint dir
 
 CHECKPOINT_DIR = '/FileStore/checkpoints/provider'
-
-spark.sparkContext.setCheckpointDir(CHECKPOINT_DIR)
-
-# COMMAND ----------
 
 # create string to use in multiple charts to subset to hospital/ASC/HOPD claims
 
@@ -64,8 +44,6 @@ HOSP_ASC_HOPD_SUBSET = """
     )
 
 """
-
-# COMMAND ----------
 
 def network_flag(network_col, network_value, suffix=''):
     """
@@ -82,8 +60,6 @@ def network_flag(network_col, network_value, suffix=''):
                     else null
              end as network_flag{suffix}
          """
-
-# COMMAND ----------
 
 def assign_fac_types(alias, current_col='FirmTypeName', new_col='facility_type'):
     """

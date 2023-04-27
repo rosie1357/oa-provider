@@ -1,10 +1,10 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
-# MAGIC 
+# MAGIC
 # MAGIC ## Provider Dashboard: 002 Dashboard
-# MAGIC 
+# MAGIC
 # MAGIC **Program:** 002_dashboard
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
@@ -13,7 +13,7 @@
 # MAGIC **Description:** Program to create and save metrics for provider dashboard <br>
 # MAGIC <br>
 # MAGIC **NOTE**: DATABASE param below is value extracted from database widget, FAC_DATABASE is assigned in ProviderRunClass
-# MAGIC 
+# MAGIC
 # MAGIC **Inputs**:
 # MAGIC   - {FAC_DATABASE}.input_org_info
 # MAGIC   - {FAC_DATABASE}.nearby_hcos_id
@@ -35,11 +35,16 @@
 
 # COMMAND ----------
 
-import pyspark.sql.functions as F
+# MAGIC %run ./_funcs/_paths_include
 
 # COMMAND ----------
 
-# MAGIC %run ./_funcs_include/all_provider_funcs
+import pyspark.sql.functions as F
+
+from _funcs.setup_funcs import get_widgets, return_widget_values
+from _funcs.ProviderRunClass import ProviderRun
+from _funcs.chart_calc_funcs import get_top_values
+from _funcs.params import HOSP_ASC_HOPD_SUBSET
 
 # COMMAND ----------
 
@@ -58,19 +63,19 @@ ProvRunInstance = ProviderRun(DEFHC_ID, RADIUS, START_DATE, END_DATE, SUBSET_LT1
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 1. Summary Counts
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 1A. Get Individual Counts
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 1Ai. Patient Count
 
 # COMMAND ----------
@@ -88,7 +93,7 @@ cnt_patient.display()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 1Aii. Inpatient Hospital Count
 
 # COMMAND ----------
@@ -118,7 +123,7 @@ cnt_inpat_hosp.display()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 1Aiii. ASC and PG Count
 
 # COMMAND ----------
@@ -137,10 +142,11 @@ cnt_firmtypes = spark.sql(f"""
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 1Aiv. PCP and Specialist Count
 
 # COMMAND ----------
+
 
 # get a count of npi records by pcp_flag to get counts for spec vs pcp
 
@@ -156,7 +162,7 @@ cnt_provs = spark.sql(f"""
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 1B. Combine All Counts, add Name and Output
 
 # COMMAND ----------
@@ -179,13 +185,13 @@ ProvRunInstance.create_final_output(all_counts, table=TBL_NAME)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 2. Hospital/ASC Shares
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 2A. Pie chart Counts
 
 # COMMAND ----------
@@ -239,7 +245,7 @@ ProvRunInstance.create_final_output(hosp_asc_pie, table=TBL_NAME)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 2B. Bar chart Counts
 
 # COMMAND ----------
@@ -274,7 +280,7 @@ ProvRunInstance.create_final_output(page1_hosp_asc_bar, table=TBL_NAME)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 3. Affiliated Specialists Performing Loyalty
 
 # COMMAND ----------
@@ -307,7 +313,7 @@ ProvRunInstance.create_final_output(aff_specs, table=TBL_NAME)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 4. PCP Referrals Sent
 
 # COMMAND ----------
@@ -335,7 +341,7 @@ ProvRunInstance.create_final_output(pcp_referrals, table=TBL_NAME)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 5. Patient Visits 90 Days after Inpatient Stay 
 
 # COMMAND ----------
