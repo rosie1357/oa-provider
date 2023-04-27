@@ -4,10 +4,10 @@ from pyspark.sql import SparkSession
 
 from _general_funcs.sdf_funcs import sdf_return_row_values
 from _general_funcs.sdf_print_comp_funcs import sdf_check_distinct
-from _general_funcs.fs_funcs import hive_tbl_count
+from _general_funcs.fs_funcs import hive_tbl_count, hive_to_df
 from _general_funcs.utils import get_dbutils
 
-from _funcs.params import ALL_TABLES, COUNTS_TBL, STATUS_TBL, GET_FAC_DATABASE
+from _funcs.params import ALL_TABLES, COUNTS_TBL, STATUS_TBL, GET_FAC_DATABASE, S3_BUCKET
 from _funcs.output_funcs import csv_upload_s3, populate_most_recent
 
 class ProviderRun(object):
@@ -18,7 +18,8 @@ class ProviderRun(object):
                  db_tables = ALL_TABLES,
                  counts_table = COUNTS_TBL,
                  status_table = STATUS_TBL,
-                 return_fac_db = GET_FAC_DATABASE):
+                 return_fac_db = GET_FAC_DATABASE,
+                 s3_bucket = S3_BUCKET):
 
         # create active session
 
@@ -34,6 +35,7 @@ class ProviderRun(object):
         self.charts_instance = charts_instance
         self.base_output_prefix = base_output_prefix
         self.db_tables = db_tables
+        self.s3_bucket = S3_BUCKET
         self.counts_table = f"{self.database}.{counts_table}"
         self.status_table = f"{self.database}.{status_table}"
         
@@ -207,7 +209,7 @@ class ProviderRun(object):
         # upload to s3 if charts instance of class
         
         if self.charts_instance:
-            csv_upload_s3(table, bucket=S3_BUCKET, key_prefix=S3_KEY, **AWS_CREDS)
+            csv_upload_s3(table, bucket=s3_bucket, key_prefix=S3_KEY, **AWS_CREDS)
             
         tbl_count = hive_tbl_count(table, condition = f"where {self.condition_stmt()}")
         
