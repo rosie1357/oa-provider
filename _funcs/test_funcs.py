@@ -1,21 +1,5 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Notebook to include all test funcs to exit with error for provider dashboard
-
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/sdf_print_comp_funcs
-
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/sdf_funcs
-
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/notebook_pipeline_funcs
-
-# COMMAND ----------
+from _general_funcs.notebook_pipeline_funcs import exit_notebook
+from _general_funcs.sdf_funcs import sdf_return_row_values
 
 def test_widgets_match(widget_values, match_tbl, match_cols):
     """

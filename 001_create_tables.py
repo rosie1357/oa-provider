@@ -42,11 +42,28 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./_funcs_include/all_provider_funcs
+# MAGIC %run ./_funcs/_paths_include
 
 # COMMAND ----------
 
 from pyspark.sql.types import IntegerType
+import pyspark.sql.functions as F
+
+from _funcs.setup_funcs import get_widgets, return_widget_values
+from _funcs.ProviderRunClass import ProviderRun
+from _funcs.params import network_flag, assign_fac_types, PHYS_LINK, CHECKPOINT_DIR, MX_CLMS_TBL, PCP_REFS_TBL, NEW_STAY_DAYS_CUTOFF
+from _funcs.geo_funcs import get_intersection, get_coordinates
+
+from _general_funcs.base_python_funcs import add_time
+from _general_funcs.sdf_funcs import sdf_return_row_values, sdf_create_window, add_null_indicator
+from _general_funcs.sdf_print_comp_funcs import sdf_frequency
+from _general_funcs.fs_funcs import rm_checkpoints, hive_to_df
+
+# COMMAND ----------
+
+# set checkpoint dir 
+
+spark.sparkContext.setCheckpointDir(CHECKPOINT_DIR)
 
 # COMMAND ----------
 
@@ -1389,8 +1406,6 @@ for col in COLS:
 # CLAIMS: crosstabs of pos_cat by pos, affiliated flag vs ID, nearby_prov
 
 sdf_frequency(sdf_claims, ['pos_cat', 'PlaceOfServiceCd'], order='cols', with_pct=True, maxobs=100)
-
-sdf_frequency(sdf_claims, ['affiliated_flag', 'provider_primary_affiliation_id'])
 
 sdf_frequency(sdf_claims, ['nearby_prov'], with_pct=True)
 

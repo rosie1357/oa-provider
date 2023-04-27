@@ -1,24 +1,11 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Notebook to include output funcs for provider dashboard
-
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/aws_funcs
-
-# COMMAND ----------
-
-# MAGIC %run /Repos/Data_Science/general_db_funcs/_general_funcs/fs_funcs
-
-# COMMAND ----------
-
 import pandas as pd
 
 import pyspark.sql.functions as F
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, TimestampType
+from pyspark.sql import SparkSession
 
-# COMMAND ----------
+from _general_funcs.fs_funcs import hive_tbl_count, hive_tbl_cols, hive_to_df
+from _general_funcs.aws_funcs import boto3_s3_client, upload_s3
 
 def populate_most_recent(sdf, table, condition):
     """
@@ -31,6 +18,8 @@ def populate_most_recent(sdf, table, condition):
     returns:
       none
     """
+
+    spark = SparkSession.getActiveSession()
 
     # first, identify if there are any existing counts for the same condition, and set most_recent = False
 
@@ -59,7 +48,6 @@ def populate_most_recent(sdf, table, condition):
       ) a
     """)
 
-# COMMAND ----------
 
 def create_empty_output(measure_dict):
     """
@@ -71,6 +59,8 @@ def create_empty_output(measure_dict):
         empty spark df with given fields
         
     """
+
+    spark = SparkSession.getActiveSession()
     
     # create set of initial base columns and final time stamp column
     
@@ -93,8 +83,6 @@ def create_empty_output(measure_dict):
     schema_full = StructType([schema_base.fields + schema_measures.fields + schema_dt.fields][0])
     
     return spark.createDataFrame([], schema_full)
-
-# COMMAND ----------
 
 def csv_upload_s3(table, bucket, key_prefix, **cred_kwargs):
     """
