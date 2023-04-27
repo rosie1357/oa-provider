@@ -209,7 +209,7 @@ class ProviderRun(object):
         # upload to s3 if charts instance of class
         
         if self.charts_instance:
-            csv_upload_s3(table, bucket=s3_bucket, key_prefix=S3_KEY, **AWS_CREDS)
+            csv_upload_s3(table, bucket=self.s3_bucket, key_prefix=S3_KEY, **AWS_CREDS)
             
         tbl_count = hive_tbl_count(table, condition = f"where {self.condition_stmt()}")
         
