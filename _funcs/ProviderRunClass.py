@@ -7,8 +7,9 @@ from _general_funcs.sdf_print_comp_funcs import sdf_check_distinct
 from _general_funcs.fs_funcs import hive_tbl_count, hive_to_df
 from _general_funcs.utils import get_dbutils
 
-from _funcs.params import ALL_TABLES, COUNTS_TBL, STATUS_TBL, GET_FAC_DATABASE, S3_BUCKET
+from _funcs.params import ALL_TABLES, COUNTS_TBL, STATUS_TBL, GET_FAC_DATABASE, S3_BUCKET, S3_KEY
 from _funcs.output_funcs import csv_upload_s3, populate_most_recent
+from _funcs.credentials import AWS_CREDS
 
 class ProviderRun(object):
     
@@ -19,7 +20,9 @@ class ProviderRun(object):
                  counts_table = COUNTS_TBL,
                  status_table = STATUS_TBL,
                  return_fac_db = GET_FAC_DATABASE,
-                 s3_bucket = S3_BUCKET):
+                 s3_bucket = S3_BUCKET,
+                 s3_key = S3_KEY,
+                 aws_creds = AWS_CREDS):
 
         # create active session
 
@@ -36,6 +39,9 @@ class ProviderRun(object):
         self.base_output_prefix = base_output_prefix
         self.db_tables = db_tables
         self.s3_bucket = S3_BUCKET
+        self.s3_key = S3_KEY
+        self.aws_creds = AWS_CREDS
+
         self.counts_table = f"{self.database}.{counts_table}"
         self.status_table = f"{self.database}.{status_table}"
         
@@ -209,7 +215,7 @@ class ProviderRun(object):
         # upload to s3 if charts instance of class
         
         if self.charts_instance:
-            csv_upload_s3(table, bucket=self.s3_bucket, key_prefix=S3_KEY, **AWS_CREDS)
+            csv_upload_s3(table, bucket=self.s3_bucket, key_prefix=self.s3_key, **self.aws_creds)
             
         tbl_count = hive_tbl_count(table, condition = f"where {self.condition_stmt()}")
         
