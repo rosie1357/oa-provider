@@ -1,10 +1,10 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ![logo](/files/ds_dhc_logo_small.png)
-# MAGIC 
+# MAGIC
 # MAGIC ## Provider Dashboard: 001 Create Tables
-# MAGIC 
+# MAGIC
 # MAGIC **Program:** 001_create_tables
 # MAGIC <br>**Authors:** Katie May, Rosie Malsberger
 # MAGIC <br>**Date:** January 2023
@@ -12,9 +12,9 @@
 # MAGIC <br>
 # MAGIC **Description:** Program to get metrics for input ID and create all base tables to save as tmp for later notebooks <br>
 # MAGIC <br>
-# MAGIC 
+# MAGIC
 # MAGIC **NOTE**: DATABASE param below is value extracted from database widget, FAC_DATABASE is assigned in ProviderRunClass
-# MAGIC 
+# MAGIC
 # MAGIC **Inputs**:
 # MAGIC   - {DATABASE}.hcp_specialty_assignment
 # MAGIC   - {DATABASE}.pos_category_assign
@@ -39,6 +39,10 @@
 # MAGIC   - {FAC_DATABASE}.{PCP_REFS_TBL}
 # MAGIC   - {FAC_DATABASE}.inpat90_dashboard
 # MAGIC   - {FAC_DATABASE}.inpat90_facilities
+
+# COMMAND ----------
+
+pip install geopandas
 
 # COMMAND ----------
 
@@ -90,13 +94,13 @@ print(f"START_DATE = {START_DATE}, END_DATE = {END_DATE}, END_DATE + 90 DAYS = {
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 1. Org Info and Affiliations View
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 1A. Get input org info
 
 # COMMAND ----------
@@ -125,7 +129,7 @@ ProvRunInstance.create_final_output(input_org_info, table=TBL_NAME)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 1Ai. Initial checks for compliance
 
 # COMMAND ----------
@@ -149,7 +153,7 @@ print(f"Input firm type: {FIRM_TYPE}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 1B. Create temp view of all HCO NPIs with IDs/networks
 
 # COMMAND ----------
@@ -223,7 +227,7 @@ ProvRunInstance.test_distinct(sdf = hcos_npi,
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 1C. Create temp view of all HCPs with IDs/affiliations/specialty
 
 # COMMAND ----------
@@ -385,15 +389,15 @@ ProvRunInstance.test_distinct(sdf = hcps,
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 2. Find nearly facilities
 
 # COMMAND ----------
 
 # MAGIC %md 
-# MAGIC 
+# MAGIC
 # MAGIC #### 2A. All Provider Coordinates
-# MAGIC 
+# MAGIC
 # MAGIC HCOs: from all_companies <br>
 # MAGIC HCPs: from physician_compare_physicians master table <br>
 # MAGIC NPIs: from NPI Registry
@@ -483,7 +487,7 @@ df_hco_npi_coords = spark.sql(f"""
 # COMMAND ----------
 
 # MAGIC %md 
-# MAGIC 
+# MAGIC
 # MAGIC #### 2B. Geographic Intersection
 
 # COMMAND ----------
@@ -529,7 +533,7 @@ df_nearby_hcos_npi = get_intersection(base_gdf = gdf_input_coord,
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 2C. HCO, HCP and NPI tables
 
 # COMMAND ----------
@@ -545,7 +549,7 @@ df_nearby_hcos_npi.createOrReplaceTempView('df_nearby_hcos_npi_vw')
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 2Ci. Nearby HCOs (IDs)
 
 # COMMAND ----------
@@ -590,7 +594,7 @@ ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME).filter(F.col('primary')
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 2Cii. Nearby HCPs
 
 # COMMAND ----------
@@ -658,7 +662,7 @@ ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 2Ciii. Nearby HCOs (NPIs)
 
 # COMMAND ----------
@@ -723,7 +727,7 @@ ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 3. Claims Tables
 
 # COMMAND ----------
@@ -738,7 +742,7 @@ create_age_stmt = """ case when PatientBirthYearNum != 9999 then MxClaimYear - P
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 3A. Master claims table
 
 # COMMAND ----------
@@ -837,7 +841,7 @@ ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 3B. PCP referrals claims table
 
 # COMMAND ----------
@@ -1037,13 +1041,13 @@ ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC #### 3C. Inpatient Stays
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 3Ci. Roll-up master claims to stay-level
 
 # COMMAND ----------
@@ -1163,7 +1167,7 @@ inpat_stays_sdf.createOrReplaceTempView('inpat_stays_vw')
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 3Cii. Identify 90-day readmissions post-discharge
 
 # COMMAND ----------
@@ -1226,7 +1230,7 @@ readmit_fac_counts_sdf = readmit_visits_sdf.groupby('facility_id', 'facility_nam
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 3Ciii. Identify 90-day other visits post discharge
 
 # COMMAND ----------
@@ -1284,7 +1288,7 @@ other_fac_counts_sdf = other_visits_sdf.groupby('facility_id', 'facility_name', 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 3Civ. Output Dashboard counts
 
 # COMMAND ----------
@@ -1311,7 +1315,7 @@ ProvRunInstance.test_distinct(sdf = hive_to_df(TBL_NAME),
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ##### 3Cv. Output Facility top 10 counts
 
 # COMMAND ----------
@@ -1362,7 +1366,7 @@ if RUN_QC==0:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
+# MAGIC
 # MAGIC ### 4. QC Frequencies
 
 # COMMAND ----------
