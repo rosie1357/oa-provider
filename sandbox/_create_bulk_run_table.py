@@ -29,9 +29,9 @@ from _funcs.params import REF_S3_BUCKET
 
 # set params to use for input excel, end date, output table
 
-IN_FILE = f"{REF_S3_BUCKET}/DashboardAlphaList_2023_03_28.xlsx"
-END_DATE = '2022-11-30'
-OUT_TABLE = 'ds_provider.provider_oa_inputs_20230328'
+IN_FILE = f"{REF_S3_BUCKET}/DashboardAlphaList_2023_05_16.xlsx"
+END_DATE = '2023-12-31'
+OUT_TABLE = 'ds_provider.provider_oa_inputs_20230516'
 
 # COMMAND ----------
 

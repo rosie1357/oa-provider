@@ -75,7 +75,7 @@ for index, row in INPUTS_DF.iterrows():
             print('\t' + f"(Run with errors on {date.date()}, will rerun)")
 
     print(process_stmt(n=SORT, x='PROCESSING'))
-    """
+    
     run_batch(arguments_dict={RUN_VALUES['RUN_SETUP'][0]: 0, 
                                RUN_VALUES['DEFHC_ID'][0]: DEFHC_ID,
                                RUN_VALUES['RADIUS'][0]: RADIUS,
@@ -84,4 +84,3 @@ for index, row in INPUTS_DF.iterrows():
                                RUN_VALUES['DATABASE'][0]: DATABASE,
                                RUN_VALUES['RUN_QC'][0]: 0,
                                RUN_VALUES['SUBSET_LT18'][0]: LT18})
-    """
