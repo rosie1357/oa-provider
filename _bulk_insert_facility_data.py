@@ -20,6 +20,7 @@
 from _general_funcs.decorators import timeit
 
 from _funcs.setup_funcs import get_widgets, return_widget_values, return_run_status
+from _funcs.params import STATUS_TBL
 
 # COMMAND ----------
 
